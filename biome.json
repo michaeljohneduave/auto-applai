@@ -1,0 +1,26 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "files": {
+    "ignore": [
+      "node_modules",
+      "dist",
+      "build"
+    ]
+  },
+  "linter": {
+    "rules": {
+      "suspicious": {
+        "useAwait": "error"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "bracketSpacing": true,
+      "trailingCommas": "es5"
+    }
+  }
+}

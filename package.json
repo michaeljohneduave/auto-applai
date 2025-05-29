@@ -1,29 +1,29 @@
 {
-  "name": "auto-applai",
-  "version": "1.0.0",
-  "main": "index.js",
-  "type": "module",
-  "workspaces": [
-    "pandoc-latex"
-  ],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "@playwright/mcp": "^0.0.26",
-    "cheerio": "^1.0.0",
-    "fastify": "^5.3.3",
-    "markdown-it": "^14.1.0",
-    "openai": "^4.103.0",
-    "playwright": "^1.53.0-alpha-1746832516000",
-    "puppeteer": "^24.9.0",
-    "remeda": "^2.22.1",
-    "turndown": "^7.2.0",
-    "xstate": "^5.19.3",
-    "zod": "^3.25.28"
-  },
-  "devDependencies": {
-    "@types/markdown-it": "^14.1.2"
-  }
+	"name": "auto-applai",
+	"version": "1.0.0",
+	"main": "index.js",
+	"type": "module",
+	"workspaces": [
+		"pandoc-latex"
+	],
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.12.0",
+		"@playwright/mcp": "^0.0.27",
+		"cheerio": "^1.0.0",
+		"fastify": "^5.3.3",
+		"markdown-it": "^14.1.0",
+		"openai": "^4.103.0",
+		"playwright": "^1.53.0-alpha-1746832516000",
+		"puppeteer": "^24.9.0",
+		"remeda": "^2.22.1",
+		"turndown": "^7.2.0",
+		"xstate": "^5.19.3",
+		"zod": "^3.25.28"
+	},
+	"devDependencies": {
+		"@types/markdown-it": "^14.1.2"
+	}
 }
