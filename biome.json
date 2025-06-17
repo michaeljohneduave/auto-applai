@@ -17,10 +17,8 @@
       }
     }
   },
-  "javascript": {
-    "formatter": {
-      "bracketSpacing": true,
-      "trailingCommas": "es5"
-    }
+  "formatter": {
+    "bracketSpacing": true,
+    "lineWidth": 80
   }
 }

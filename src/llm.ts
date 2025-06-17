@@ -1,0 +1,555 @@
+import { hrtime } from "node:process";
+import { setTimeout } from "node:timers/promises";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import type {
+	CallToolResult,
+	Prompt,
+} from "@modelcontextprotocol/sdk/types.js";
+import OpenAI from "openai";
+import type {
+	ChatCompletion,
+	ChatCompletionCreateParamsNonStreaming,
+	ChatCompletionMessageParam,
+	ChatCompletionTool,
+} from "openai/resources.mjs";
+import { randomString } from "remeda";
+import { z } from "zod";
+
+interface MCPClientConfig {
+	name: string;
+	version: string;
+}
+
+interface MCPSSEConfig extends MCPClientConfig {
+	transport: "sse";
+	url: string;
+}
+
+interface MCPStdioConfig extends MCPClientConfig {
+	transport: "stdio";
+	command: string;
+	args?: string[];
+}
+
+type LLMOptions = {
+	model?: string;
+	maxRuns?: number;
+	useEval?: boolean;
+	apiKey?: string;
+	baseUrl?: string;
+	parallelToolCalls?: boolean;
+};
+
+type NativeTool<T extends z.ZodRawShape> = {
+	name: string;
+	description: string;
+	parameters: T;
+	execute: (
+		args: z.infer<z.ZodObject<T>>,
+	) => CallToolResult | Promise<CallToolResult>;
+};
+
+export const BIG_MODEL = "gemini-2.5-flash-preview-05-20";
+export const SMART_MODEL = "gemini-2.5-pro-preview-06-05";
+export const SMALL_MODEL = "gemini-2.0-flash";
+
+export const grok = {
+	apiKey: process.env.XAI_API_KEY,
+	baseUrl: "https://api.x.ai/v1",
+	models: {
+		MINI: "grok-3-mini",
+	},
+};
+
+export const google = {
+	apiKey: process.env.GEMINI_API_KEY,
+	baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+	models: {
+		BIG_MODEL: "gemini-2.5-flash-preview-05-20",
+		SMART_MODEL: "gemini-2.5-pro-preview-06-05",
+		SMALL_MODEL: "gemini-2.0-flash",
+	},
+};
+
+export default class LLM {
+	#name = "LLM";
+
+	#mcps: Array<{
+		name: string;
+		client: Client;
+		tools: ChatCompletionTool["function"][];
+		prompts: Prompt[];
+	}> = [];
+	#tools: NativeTool<z.ZodRawShape>[] = [];
+
+	#openai: OpenAI;
+	#model = SMALL_MODEL; // Default model
+	#maxRuns: number;
+
+	#isReady = true;
+	#useEval = false;
+	#parallelToolCalls = false;
+
+	constructor(name?: string, options?: LLMOptions) {
+		switch (options?.model) {
+			case grok.models.MINI:
+				this.#openai = new OpenAI({
+					apiKey: grok.apiKey,
+					baseURL: grok.baseUrl,
+				});
+				break;
+			case google.models.BIG_MODEL:
+			case google.models.SMALL_MODEL:
+			case google.models.SMART_MODEL:
+				this.#openai = new OpenAI({
+					apiKey: google.apiKey,
+					baseURL: google.baseUrl,
+				});
+				break;
+			default:
+				this.#openai = new OpenAI({
+					apiKey: google.apiKey,
+					baseURL: google.baseUrl,
+				});
+				break;
+		}
+
+		if (name) {
+			this.#name = name;
+		}
+
+		if (options) {
+			this.#model = options.model || this.#model;
+			this.#maxRuns = options.maxRuns || this.#maxRuns;
+			this.#useEval = options.useEval || this.#useEval;
+			this.#parallelToolCalls =
+				options.parallelToolCalls || this.#parallelToolCalls;
+		}
+	}
+
+	async #toolNotifHandler() {
+		console.log("Tool notification received, refreshing tools...");
+		this.#isReady = false;
+		// For now we refresh all mcp client tools when a tool notification is received
+		for (const mcp of this.#mcps) {
+			const tools = await mcp.client.listTools();
+
+			mcp.tools = tools.tools.map((tool) => {
+				return {
+					name: tool.name,
+					description: tool.description,
+					inputSchema: tool.inputSchema,
+				};
+			});
+		}
+		this.#isReady = true;
+	}
+
+	async addMCPClient(params: MCPSSEConfig | MCPStdioConfig) {
+		const client = new Client({
+			name: params.name,
+			version: params.version,
+		});
+
+		if (params.transport === "stdio") {
+			const stdioTransport: StdioClientTransport = new StdioClientTransport({
+				command: params.command,
+				args: params.args || [],
+			});
+			await client.connect(stdioTransport);
+		} else if (params.transport === "sse") {
+			const sseTransport = new SSEClientTransport(new URL(params.url));
+			await client.connect(sseTransport);
+		} else {
+			throw new Error("Unsupported transport type");
+		}
+
+		const toolsResult = await client.listTools();
+		const prompts = await client.listPrompts();
+
+		client.setNotificationHandler(
+			z.object({
+				method: z.literal("notifications/tools/list_changed"),
+			}),
+			() => this.#toolNotifHandler(),
+		);
+		this.#mcps.push({
+			name: params.name,
+			client,
+			tools: toolsResult.tools.map((tool) => {
+				return {
+					name: tool.name,
+					description: tool.description,
+					parameters: tool.inputSchema,
+				};
+			}),
+			prompts: prompts.prompts,
+		});
+
+		console.log(
+			"Tools added:",
+			toolsResult.tools.map((t) => t.name),
+		);
+	}
+
+	async callTool({
+		name,
+		args = "{}",
+	}: {
+		name: string;
+		args?: string;
+	}) {
+		for (const mcp of this.#mcps) {
+			const tool = mcp.tools.find((t) => t.name === name);
+			if (!tool) {
+				continue;
+			}
+
+			let tries = 3;
+			while (tries--) {
+				const result = await Promise.race([
+					mcp.client.callTool({
+						name,
+						arguments: JSON.parse(args),
+					}),
+					setTimeout(5000, new Error("Timeout")),
+				]);
+
+				// Timeout
+				if (result instanceof Error) {
+					return {
+						isError: true,
+						content: [
+							{
+								type: "text",
+								text: "Error occurred on calling tool",
+							},
+						],
+					};
+				}
+
+				if (result.error) {
+					throw new Error(`Error calling tool ${name}: ${result.error}`);
+				}
+
+				return result;
+			}
+		}
+
+		for (const t of this.#tools) {
+			if (t.name === name) {
+				return t.execute(JSON.parse(args));
+			}
+		}
+
+		throw new Error(`Tool ${name} not found`);
+	}
+
+	addTool<T extends z.ZodRawShape>(opts: NativeTool<T>) {
+		this.#tools.push({
+			name: opts.name,
+			description: opts.description,
+			parameters: opts.parameters,
+			execute: (args) =>
+				opts.execute(args as unknown as z.infer<z.ZodObject<T>>),
+		});
+	}
+
+	#getTools() {
+		return this.#mcps
+			.flatMap((mcp) =>
+				mcp.tools.map((tool) => ({
+					type: "function",
+					function: {
+						name: tool.name,
+						description: tool.description,
+						parameters: tool.parameters,
+					},
+				})),
+			)
+			.concat(
+				this.#tools.map((tool) => ({
+					type: "function",
+					function: {
+						name: tool.name,
+						description: tool.description,
+						parameters: tool.parameters,
+					},
+				})),
+			) as ChatCompletionTool[];
+	}
+
+	async eval({
+		evalMessages,
+	}: {
+		evalMessages: ChatCompletionMessageParam[];
+	}) {
+		const response = await this.#openai.chat.completions.create({
+			model: this.#model,
+			messages: [
+				{
+					role: "system",
+					content: `
+# Identity
+You are an expert in evaluating LLM workflows and responses
+
+# Instructions
+1. You are given a series of messages from an interaction between the LLM and the user.
+2. Evaluate the actions of the LLM and in accordance with the instructions and system prompt.
+3. Steer the LLM into the correct path to help them help the user.
+4. There are tools available to the LLM.
+				`,
+				},
+				{
+					role: "user",
+					content: `
+<messages>
+${JSON.stringify(evalMessages)}
+</messages>
+
+<tools>
+${JSON.stringify(this.#getTools())}
+</tools>
+					`,
+				},
+			],
+			temperature: 0.2,
+			top_p: 0.9,
+		});
+
+		return response.choices[0].message.content;
+	}
+
+	async generateOutput_grok(
+		params: Exclude<
+			Omit<ChatCompletionCreateParamsNonStreaming, "model">,
+			"response_format"
+		>,
+	) {
+		await this.#waitForReady();
+		let completion: ChatCompletion;
+
+		while (true) {
+			completion = await this.#openai.chat.completions.create({
+				...params,
+				model: this.#model,
+				tools: this.#getTools(),
+			});
+			const [choice] = completion.choices;
+
+			console.log("%o", choice);
+
+			if (choice.message.tool_calls) {
+				choice.message.tool_calls = choice.message.tool_calls.map((t) => ({
+					...t,
+					id: t.id || randomString(5),
+				}));
+
+				params.messages.push(choice.message);
+
+				console.log("Tool Calls");
+				console.log(
+					choice.message.tool_calls.map(
+						(t) => `${t.function.name}: ${t.function.arguments}`,
+					),
+				);
+
+				const toolResults = await Promise.all(
+					choice.message.tool_calls.map(async (toolCall) => {
+						return {
+							id: toolCall.id,
+							content: await this.callTool({
+								name: toolCall.function.name,
+								args: toolCall.function.arguments,
+							}),
+						};
+					}),
+				);
+
+				console.log("Tool Results");
+				console.log("%o", toolResults);
+
+				params.messages = params.messages.concat(
+					toolResults.map((res) => ({
+						role: "tool",
+						tool_call_id: res.id,
+						content: JSON.stringify(res.content),
+					})),
+				);
+			} else if (choice.finish_reason === "stop") {
+				if (this.#useEval) {
+					const response = await this.eval({
+						evalMessages: params.messages,
+					});
+
+					console.log(`${this.#name}'s response evaluation`, response);
+				}
+
+				break;
+			}
+		}
+
+		return completion;
+	}
+
+	async generateOutput(
+		params: Exclude<
+			Omit<ChatCompletionCreateParamsNonStreaming, "model">,
+			"response_format"
+		>,
+	) {
+		if (Object.values(grok.models).includes(this.#model)) {
+			return this.generateOutput_grok(params);
+		}
+
+		await this.#waitForReady();
+		let completion: ChatCompletion;
+
+		while (true) {
+			completion = await this.#openai.chat.completions.create({
+				...params,
+				model: this.#model,
+				tools: this.#getTools(),
+			});
+			const [choice] = completion.choices;
+
+			if (choice.finish_reason === "stop") {
+				if (this.#useEval) {
+					const response = await this.eval({
+						evalMessages: params.messages,
+					});
+
+					console.log(`${this.#name}'s response evaluation`, response);
+				}
+
+				break;
+			}
+
+			if (
+				choice.finish_reason === "tool_calls" ||
+				choice.finish_reason === "function_call"
+			) {
+				if (choice.message.tool_calls) {
+					choice.message.tool_calls = choice.message.tool_calls.map((t) => ({
+						...t,
+						id: t.id || randomString(5),
+					}));
+
+					params.messages.push(choice.message);
+
+					console.log("Tool Calls");
+					console.log(
+						choice.message.tool_calls.map(
+							(t) => `${t.function.name}: ${t.function.arguments}`,
+						),
+					);
+
+					// No parallel tool calls for now
+					for (const toolCall of choice.message.tool_calls) {
+						params.messages.push({
+							role: "tool",
+							tool_call_id: toolCall.id,
+							content: JSON.stringify(
+								await this.callTool({
+									name: toolCall.function.name,
+									args: toolCall.function.arguments,
+								}),
+							),
+						});
+					}
+				} else {
+					console.error(
+						`Finish reason is ${choice.finish_reason} but no tool calls`,
+					);
+					console.error("%o", choice.message);
+				}
+			} else {
+				console.log("Default finish_reason");
+				console.log(completion.choices[0]);
+				break;
+			}
+		}
+
+		return completion;
+	}
+
+	async generateStructuredOutput(
+		params: Omit<ChatCompletionCreateParamsNonStreaming, "model"> &
+			Required<Pick<ChatCompletionCreateParamsNonStreaming, "response_format">>,
+	) {
+		let retries = 1;
+
+		await this.#waitForReady();
+
+		while (retries--) {
+			try {
+				const tools: ChatCompletionTool[] = this.#mcps
+					.flatMap((mcp) =>
+						mcp.tools.map((tool) => ({
+							type: "function" as const,
+							function: {
+								name: tool.name,
+								description: tool.description,
+								strict: true,
+								parameters: tool.parameters,
+							},
+						})),
+					)
+					.concat(
+						this.#tools.map((tool) => ({
+							type: "function" as const,
+							function: {
+								name: tool.name,
+								description: tool.description,
+								strict: true,
+								parameters: tool.parameters,
+							},
+						})),
+					);
+
+				const response = await this.#openai.beta.chat.completions.parse({
+					...params,
+					model: this.#model,
+					tools,
+				});
+
+				return response;
+			} catch (error) {
+				console.error(error);
+				if (retries === 0) {
+					throw new Error(
+						`Error processing query after retries: ${error.message}`,
+					);
+				}
+				console.warn(`Retrying query due to error: ${error.message}`);
+			}
+		}
+
+		throw new Error("Error processing query: Unable to complete after retries");
+	}
+
+	async #waitForReady() {
+		if (this.#isReady) {
+			return;
+		}
+		const start = hrtime.bigint();
+		while (!this.#isReady) {
+			// await new Promise((resolve) => setTimeout(resolve, 100));
+			await setTimeout(100);
+		}
+
+		console.log(
+			`LLM is ready after ${Number(
+				(hrtime.bigint() - start) / BigInt(1_000_000),
+			)} ms`,
+		);
+	}
+
+	async cleanup() {
+		for (const mcp of this.#mcps) {
+			await mcp.client.close();
+		}
+	}
+}
