@@ -11,7 +11,7 @@ WORKDIR /app
 # We install bash as Volta script often assumes it exists
 RUN apt-get update && apt-get install -y --no-install-recommends bash curl && rm -rf /var/lib/apt/lists/*
 RUN curl https://get.volta.sh | bash
-ENV VOLTA_HOME /root/.volta
+ENV VOLTA_HOME=/root/.volta
 ENV PATH="${VOLTA_HOME}/bin:${PATH}"
 RUN volta install node@22
 
@@ -32,7 +32,7 @@ COPY pandoc-latex/package.json ./pandoc-latex/
 RUN npm install
 
 # Copy source files that are part of this workspace
-COPY pandoc-latex/server.ts ./pandoc-latex/
+COPY pandoc-latex/src ./pandoc-latex/src
 
 # Set the working directory to the workspace directory inside the container
 WORKDIR /app/pandoc-latex
@@ -44,6 +44,4 @@ EXPOSE 80
 # Define the command to run when the container starts.
 # This will start your Fastify server using Node.js with the experimental flag.
 # Ensure 'server.ts' matches the copied filename.
-ENTRYPOINT ["node", "--experimental-transform-types", "server.ts"]
-
-CMD []
+ENTRYPOINT ["node", "--experimental-transform-types", "src/server.ts"]
