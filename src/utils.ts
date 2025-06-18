@@ -30,7 +30,7 @@ function isSocialMediaOrEmail(url: string): boolean {
 
 export async function htmlFormCrawler(pageUrl: string) {
 	console.log("Crawling using non mcp puppeteer", pageUrl);
-	const url = new URL("http://localhost:3000/scrape");
+	const url = new URL(`${process.env.PUPPETEER_SERVICE_URL}/scrape`);
 	url.searchParams.set("url", pageUrl);
 	url.searchParams.set("format", "html");
 	url.searchParams.set("screenshot", "true");

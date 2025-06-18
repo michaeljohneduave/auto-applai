@@ -28,7 +28,7 @@ await fs.mkdir("assets/failed-scrapes", {
 
 async function generatePdf(latexResume: string) {
 	console.log("Generating PDF using pandoc");
-	const response = await fetch("http://localhost:4000/compile", {
+	const response = await fetch(`${process.env.PDF_SERVICE_URL}/compile`, {
 		method: "POST",
 		body: JSON.stringify({
 			latex: latexResume,
@@ -55,7 +55,7 @@ async function llmFormCrawler(pageUrl: string) {
 	await llm.addMCPClient({
 		name: "puppeteer",
 		version: "1",
-		url: "http://localhost:3000/sse",
+		url: process.env.PUPPETEER_SERVICE_URL,
 		transport: "sse",
 	});
 
@@ -491,7 +491,7 @@ async function checkRequiredServices() {
 
 	// Check Pandoc Server
 	try {
-		const pandocResponse = await fetch("http://localhost:4000/health");
+		const pandocResponse = await fetch(`${process.env.PDF_SERVICE_URL}/health`);
 		if (!pandocResponse.ok) throw new Error("Pandoc server is not responding");
 	} catch (error) {
 		throw new Error("Pandoc server must be running on port 4000");
@@ -499,7 +499,9 @@ async function checkRequiredServices() {
 
 	// Check Puppeteer MCP Server
 	try {
-		const mcpResponse = await fetch("http://localhost:3000/health");
+		const mcpResponse = await fetch(
+			`${process.env.PUPPETEER_SERVICE_URL}/health`,
+		);
 		if (!mcpResponse.ok)
 			throw new Error("Puppeteer MCP server is not responding");
 	} catch (error) {

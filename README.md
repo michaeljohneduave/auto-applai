@@ -70,19 +70,28 @@ npm start
 
 ```
 auto-applai/
+├── services/                # Containerized services
+│   ├── pdf/                # PDF generation service
+│   │   ├── Dockerfile
+│   │   └── src/
+│   └── puppeteer/          # Browser automation service
+│       ├── Dockerfile
+│       └── src/
 ├── src/
-│   ├── auto-apply.ts      # Main orchestration logic
-│   ├── llm.ts             # LLM management and MCP integration
-│   ├── formCompletion.ts  # AI form field completion
-│   ├── formFiller.ts      # Automated form filling
-│   ├── schema.ts          # Zod schemas for data validation
-│   └── utils.ts           # Utility functions
+│   ├── auto-apply.ts       # Main orchestration logic
+│   ├── llm.ts              # LLM management and MCP integration
+│   ├── formCompletion.ts   # AI form field completion
+│   ├── formFiller.ts       # Automated form filling
+│   ├── schema.ts           # Zod schemas for data validation
+│   └── utils.ts            # Utility functions
 ├── assets/
-│   ├── resume.md          # Your base resume (Markdown)
-│   ├── resume.tex         # LaTeX resume template
-│   ├── personal-info.md   # Personal information
-│   └── failed-scrapes/    # Debug output for failed scrapes
-└── linux-chrome-profile/ # Chrome profile for consistent scraping
+│   ├── resume.md           # Your base resume (Markdown)
+│   ├── resume.tex          # LaTeX resume template
+│   ├── personal-info.md    # Personal information
+│   └── failed-scrapes/     # Debug output for failed scrapes
+├── docker-compose.yml      # Service orchestration
+├── package.json            # Project dependencies
+└── linux-chrome-profile/   # Chrome profile for consistent scraping
 ```
 
 ## 🔧 Configuration
@@ -92,7 +101,6 @@ auto-applai/
 The `docker-compose.yml` file includes:
 - PDF generation service
 - Puppeteer MCP server
-- Redis cache (optional)
 
 ### Environment Variables
 
@@ -104,11 +112,6 @@ GROK_API_KEY=your_grok_api_key
 # Service URLs (Docker Compose)
 PDF_SERVICE_URL=http://pdf-service:4000/compile
 PUPPETEER_SERVICE_URL=http://puppeteer-service:3000/sse
-REDIS_URL=redis://redis:6379
-
-# Application Settings
-RATING_THRESHOLD=8
-MAX_CRAWLER_RUNS=10
 ```
 
 ### Required Assets

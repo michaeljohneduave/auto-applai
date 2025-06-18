@@ -59,7 +59,7 @@ ${url}
 	await llm.addMCPClient({
 		name: "puppeteer",
 		version: "1",
-		url: "http://localhost:3000/sse",
+		url: `${process.env.PUPPETEER_SERVICE_URL}/sse`,
 		transport: "sse",
 	});
 
@@ -76,10 +76,13 @@ ${url}
 			formData.append("file", blob, fileName);
 			formData.append("fileName", fileName);
 
-			const response = await fetch("http://localhost:3000/upload-resume", {
-				method: "POST",
-				body: formData,
-			});
+			const response = await fetch(
+				`${process.env.PUPPETEER_SERVICE_URL}/upload-resume`,
+				{
+					method: "POST",
+					body: formData,
+				},
+			);
 
 			const data = await response.text();
 
