@@ -1,11 +1,7 @@
 import fs from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
-import {
-	type CallToolResult,
-	PaginatedRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import puppeteer, { type Browser, type Page } from "puppeteer";
-import { randomInteger } from "remeda";
 import Turndown from "turndown";
 import { z } from "zod";
 
@@ -43,22 +39,23 @@ export const createBrowser = createTool({
 	execute: async () => {
 		try {
 			const sessionId = crypto.randomUUID();
-			const browser = await puppeteer.connect({
-				browserURL: "http://127.0.0.1:9222",
-				defaultViewport: null,
-			});
-
-			// const browser = await puppeteer.launch({
-			// 	userDataDir: "./linux-chrome-profile",
-			// 	args: [
-			// 		"--no-sandbox",
-			// 		"--disable-setuid-sandbox",
-			// 		"--disable-dev-shm-usage",
-			// 		"--disable-accelerated-2d-canvas",
-			// 		"--no-first-run",
-			// 		"--no-zygote",
-			// 	],
+			// const browser = await puppeteer.connect({
+			// 	browserURL: "http://127.0.0.1:9222",
+			// 	defaultViewport: null,
 			// });
+
+			const browser = await puppeteer.launch({
+				headless: true,
+				userDataDir: "../linux-chrome-profile",
+				args: [
+					"--no-sandbox",
+					"--disable-setuid-sandbox",
+					"--disable-dev-shm-usage",
+					"--disable-accelerated-2d-canvas",
+					"--no-first-run",
+					"--no-zygote",
+				],
+			});
 
 			browsers.set(sessionId, browser);
 
@@ -535,8 +532,7 @@ export const closeBrowser = createTool({
 			await page.close();
 		}
 
-		// await browser.close();
-
+		await browser.close();
 		browsers.delete(sessionId);
 		pageInstances.delete(sessionId);
 

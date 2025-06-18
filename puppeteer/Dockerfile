@@ -1,8 +1,8 @@
 # Use an official Node.js runtime as a parent image
-FROM node:22-slim
+FROM node:22.16-slim
 
 # Set the working directory in the container
-WORKDIR /usr/src/app
+WORKDIR /app
 
 # Install dependencies for Puppeteer (Chromium), Xvfb, PulseAudio, and FFmpeg
 # This is the most critical part. These are the libraries Chromium needs to run.
@@ -52,22 +52,20 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
+COPY package.json ./
+
 # Copy package.json and package-lock.json
-COPY package*.json ./
+COPY puppeteer/package*.json ./puppeteer/
 
 # Install app dependencies
-# We use --ignore-scripts to prevent Puppeteer from downloading Chromium,
-# as the image will provide it.
-RUN npm install --ignore-scripts
+RUN npm install
 
 # Bundle app source
-COPY . .
+COPY puppeteer/src/ ./puppeteer/src/
+
+WORKDIR /app/puppeteer
 
 # Expose the port the app runs on
-EXPOSE 8080
+EXPOSE 80
 
-# Use an entrypoint script to start services
-COPY entrypoint.sh /usr/src/app/entrypoint.sh
-RUN chmod +x /usr/src/app/entrypoint.sh
-
-ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+ENTRYPOINT ["node", "--experimental-transform-types", "src/server.ts"]

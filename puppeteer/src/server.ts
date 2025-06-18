@@ -14,15 +14,9 @@ import {
 } from "fastify-type-provider-zod";
 import puppeteer from "puppeteer";
 import { z } from "zod";
-// import puppeteer from "puppeteer-extra";
-// import adBlockerPlugin from "puppeteer-extra-plugin-adblocker";
-// import stealthPlugin from "puppeteer-extra-plugin-stealth";
 import { extractHtml, extractMarkdown } from "./apiTools.ts";
 import mcpRoutes from "./mcp-server.ts";
 import { browsers, pageInstances } from "./tools.ts";
-
-// puppeteer.use(stealthPlugin());
-// puppeteer.use(adBlockerPlugin());
 
 // --- Fastify and MCP Server Setup ---
 const app = Fastify({
@@ -55,16 +49,23 @@ app.withTypeProvider<ZodTypeProvider>().get(
 		schema: {
 			querystring: z.object({
 				url: z.string().url(),
-				headless: z.string().default("true"),
 				format: z.enum(["html", "markdown"]),
 				screenshot: z.string().default("false"),
 			}),
 		},
 	},
 	async (req, res) => {
-		const browser = await puppeteer.connect({
-			browserURL: "http://127.0.0.1:9222",
-			defaultViewport: null,
+		const browser = await puppeteer.launch({
+			headless: true,
+			userDataDir: "../linux-chrome-profile",
+			args: [
+				"--no-sandbox",
+				"--disable-setuid-sandbox",
+				"--disable-dev-shm-usage",
+				"--disable-accelerated-2d-canvas",
+				"--no-first-run",
+				"--no-zygote",
+			],
 		});
 
 		const page = await browser.newPage();
@@ -96,6 +97,7 @@ app.withTypeProvider<ZodTypeProvider>().get(
 		}
 
 		await page.close();
+		await browser.close();
 		res.send({
 			data,
 			screenshot,
@@ -137,6 +139,10 @@ app
 		res.status(200).send(filePath);
 	});
 
+app.get("/health", (req, res) => {
+	res.status(200).send();
+});
+
 async function cleanup() {
 	for (const [sessionId, context] of browsers.entries()) {
 		try {
@@ -170,7 +176,7 @@ process.on("SIGTERM", async () => {
 	process.exit(0);
 });
 
-const PORT = 3000;
+const PORT = 80;
 app
 	.listen({ port: PORT, host: "0.0.0.0" })
 	.then(() => {
