@@ -364,3 +364,7 @@ export const agenticCrawlerSchema = z.object({
 export const urlExtractorSchema = z.object({
 	url: z.string().describe("Job application URL"),
 });
+
+export const latexResumeSchema = z.object({
+	resume: z.string().describe("The latex resume"),
+});

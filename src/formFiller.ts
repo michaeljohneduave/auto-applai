@@ -35,6 +35,11 @@ You are an expert in filling out job applications.
 7. Submit the form
 8. Verify that the form was submitted by rechecking the form's html content
 9. Take a screenshot and close the browser
+
+# Notes:
+1. Before calling createBrowser again, makeke sure to close the browser.
+2. Sometimes dropdowns don't work, so you may need to click on the dropdown or field, check the content again via extractHTML and select the option manually.
+3. For dropdowns, always carefully check the options and select the most relevant option. The answer might not be the same as the one in the options.
     `,
 		},
 		{

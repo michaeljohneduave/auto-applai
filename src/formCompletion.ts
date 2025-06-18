@@ -3,7 +3,7 @@ import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import { evaluator } from "./evaluator.ts";
-import LLM, { BIG_MODEL } from "./mcp-servers/llm.ts";
+import LLM, { BIG_MODEL } from "./llm.ts";
 import {
 	type evaluatorSchema,
 	formCompleterSchema,

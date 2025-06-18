@@ -7,7 +7,11 @@ import type { z } from "zod";
 import { formCompleter } from "./formCompletion.ts";
 import { formFiller } from "./formFiller.ts";
 import LLM, { BIG_MODEL, SMALL_MODEL } from "./llm.ts";
-import { jobPostingSchema, urlExtractorSchema } from "./schema.ts";
+import {
+	jobPostingSchema,
+	latexResumeSchema,
+	urlExtractorSchema,
+} from "./schema.ts";
 import { htmlFormCrawler } from "./utils.ts";
 
 const readline = createInterface({
@@ -60,13 +64,27 @@ async function llmFormCrawler(pageUrl: string) {
 			role: "system",
 			content: `
 # Identity
-You are an agentic expert crawler with a singular goal of finding the job application form
+You are an expert web crawler specializing in job application form detection.
+
+# Goal
+Find the primary job application form URL with 100% accuracy.
 
 # Instructions
-1. You are given a url of a job posting
-2. Use the tools provided for you to scrape and analyze the html content of the page
-3. If you don't see an application form, try to check the links in the page.
-4. Write the url of the page that achieves the user's goal in plain text.
+1. Given a job posting URL, analyze the page HTML
+2. Identify application forms using these criteria:
+   - Contains input fields for job applications
+   - Has submit/apply button
+   - Related to job application process
+3. If no form found on main page:
+   - Explore links containing keywords: apply, application, career, job
+   - Maximum exploration depth: 2 levels
+	 - Forms can also be embedded in iframes or iframes themselves, look for links inside iframes
+   - Skip external domains except approved job platforms
+4. Return exactly one URL in this format:
+   <form-url>https://example.com/apply</form-url>
+
+# Output Format
+Single URL wrapped in form-url tags. No other text.
 			`,
 		},
 		{
@@ -135,14 +153,42 @@ async function resumeAdjuster(
 
 	const systemPrompt = `
 # Identity
-You are an expert resume writer.
+You are an expert ATS-optimized resume writer with 10+ years experience.
+
+# Goal
+Create a perfectly tailored resume matching 90%+ of job requirements while maintaining authenticity.
 
 # Instructions
-1. You are given a base resume from the user and an html content of the job posting.
-2. Your goal is to carefully adjust the resume to fit the job posting.
-3. Add or remove content from the base resume to tailor fit the new resume to the job posting
-4. Strictly follow the formatting of the base resume
-5. Convert relevant skills into bold font weights, strictly for technical skills and technologies
+1. Analyze Input:
+   - Base resume structure and content
+   - Job posting requirements and keywords
+   - Company culture indicators
+
+2. Optimization Rules:
+   - Match 90%+ of required skills and qualifications
+   - Preserve all verifiable information (dates, degrees, companies)
+   - Keep original resume sections and order
+   - Maintain professional tone and format
+
+3. Content Modification:
+   - Prioritize relevant experience sections
+   - Add missing required skills (if truthfully possessed)
+   - Remove irrelevant experiences
+   - Limit to 2 pages maximum
+
+4. Formatting:
+   - Bold only technical skills: languages, frameworks, tools
+   - Maintain original section headings
+   - Keep bullet point structure
+   - Preserve contact information
+
+5. Keywords:
+   - Include 80%+ of job posting keywords naturally
+   - Match technical terms exactly
+   - Use industry standard abbreviations
+
+# Output Format
+Return modified resume in exact input format with no additional text.
   `;
 
 	const response = await llm.generateOutput({
@@ -178,7 +224,7 @@ async function latexResumeGenerator(reference: string, resume: string) {
 		model: SMALL_MODEL,
 	});
 
-	const response = await llm.generateOutput({
+	const response = await llm.generateStructuredOutput({
 		temperature: 0.1,
 		top_p: 0.9,
 		messages: [
@@ -186,12 +232,38 @@ async function latexResumeGenerator(reference: string, resume: string) {
 				role: "system",
 				content: `
 # Identity
-You are an expert in generating latex documents.
+You are a LaTeX document specialist with expertise in resume formatting.
+
+# Goal
+Generate perfectly formatted LaTeX resume maintaining exact styling of reference.
 
 # Instructions
-1. You will be given a reference latex resume and an updated resume in markdown format.
-2. Convert the updated resume in latex.
-3. Do not include any other text or formatter, just directly output the resume in latex format.
+1. Document Structure:
+   - Use identical document class and packages as reference
+   - Maintain all custom commands and definitions
+   - Preserve margin and spacing settings
+   - Keep exact section formatting
+
+2. Content Conversion Rules:
+   - Convert markdown bold to \textbf{content}
+   - Convert markdown italics to \textit{content}
+   - Maintain bullet points using reference format
+   - Preserve all whitespace relationships
+
+3. Required Elements:
+   - Include all reference preamble commands
+   - Maintain document environment structure
+   - Keep all custom styling commands
+   - Preserve reference's section hierarchy
+
+4. Validation:
+   - Ensure all brackets are properly closed
+   - Verify special character escaping
+   - Check for required package inclusions
+   - Confirm environment consistency
+
+# Output Format
+Pure LaTeX code without explanations or markdown.
         `,
 			},
 			{
@@ -205,13 +277,18 @@ ${resume}
         `,
 			},
 		],
+		response_format: zodResponseFormat(latexResumeSchema, "latex-resume"),
 	});
 
-	if (!response.choices[0].message.content) {
+	if (!response.choices[0].message.parsed) {
 		throw new Error("Failed to generate latex resume");
 	}
 
-	return response.choices[0].message.content;
+	const parsed = response.choices[0].message.parsed as z.infer<
+		typeof latexResumeSchema
+	>;
+
+	return parsed.resume;
 }
 
 async function jobInfoExtractor(
@@ -228,14 +305,54 @@ async function jobInfoExtractor(
 				role: "system",
 				content: `
 # Identity
-You are a expert in job information extraction.
+You are a senior job posting analyst specializing in structured data extraction.
+
+# Goal
+Extract 100% accurate job application information in structured format.
 
 # Instructions
-1. Given an html, look for the following information, Company info, Job info, Application form.
-2. Extract ALL the fields and labels in the form.
-3. Transform the label into a question and infer what type of question
-4. The goal is to extract all the information needed to apply to the job
-5. Carefully analyze the html for forms, the application form must be present in order to be considered part of the applicationForm output
+1. Company Information Extraction:
+   - Legal company name
+   - Industry sector
+   - Company size
+   - Location details
+   - Company culture indicators
+
+2. Job Details Analysis:
+   - Position title (standardized)
+   - Required skills (prioritized)
+   - Experience requirements
+   - Education requirements
+   - Salary information if available
+   - Employment type
+   - Location/remote status
+
+3. Application Form Processing:
+   - Identify all input fields
+   - Classify field types:
+     * Personal Information
+     * Professional Experience
+     * Education
+     * Skills/Qualifications
+     * Screening Questions
+   - Transform labels to clear questions
+   - Note required vs optional fields
+   - Identify file upload requirements
+
+4. Field Classification Rules:
+   - Personal: name, contact, demographics
+   - Professional: work history, references
+   - Qualifications: skills, certifications
+   - Assessment: custom questions, scenarios
+
+# Output Format
+Strictly follow the jobPostingSchema structure with all required fields.
+
+# Validation Criteria
+- All required fields must be identified
+- Questions must be clear and answerable
+- Field types must be correctly classified
+- Form structure must be complete
         `,
 			},
 			{
@@ -255,21 +372,41 @@ You are a expert in job information extraction.
 	return response.choices[0].message.parsed;
 }
 
+async function loadApplicationContext() {
+	try {
+		const [resume, latexReferenceResume, personalInfo] = await Promise.all([
+			fs.readFile("assets/resume.md", "utf-8").catch(() => {
+				throw new Error(
+					"Resume file not found. Please ensure assets/resume.md exists.",
+				);
+			}),
+			fs.readFile("assets/resume.tex", "utf-8").catch(() => {
+				throw new Error("LaTeX resume template not found.");
+			}),
+			fs.readFile("assets/personal-info.md", "utf-8").catch(() => {
+				throw new Error("Personal info file not found.");
+			}),
+		]);
+
+		return { resume, latexReferenceResume, personalInfo };
+	} catch (error) {
+		console.error("Failed to load application context:", error);
+		throw error;
+	}
+}
+
 async function orchestrator(jobUrl: string) {
-	const ratingThreshold = 8;
 	const mdContent: {
 		markdown: string;
 		rating: number;
 		url: string;
 		reasoning: string;
 	}[] = [];
-	const [resume, latexReferenceResume, personalInfo] = await Promise.all([
-		fs.readFile("assets/resume.md", "utf-8"),
-		fs.readFile("assets/resume.tex", "utf-8"),
-		fs.readFile("assets/personal-info.md", "utf-8"),
-	]);
+	const { resume, latexReferenceResume, personalInfo } =
+		await loadApplicationContext();
 	const { html, validLinks, screenshot } = await htmlFormCrawler(jobUrl);
 	const applicationDetails = await jobInfoExtractor(html);
+
 	let formUrl = jobUrl;
 
 	if (!applicationDetails.successfulScrape) {
@@ -349,7 +486,32 @@ async function orchestrator(jobUrl: string) {
 	});
 }
 
+async function checkRequiredServices() {
+	console.log("Checking required services...");
+
+	// Check Pandoc Server
+	try {
+		const pandocResponse = await fetch("http://localhost:4000/health");
+		if (!pandocResponse.ok) throw new Error("Pandoc server is not responding");
+	} catch (error) {
+		throw new Error("Pandoc server must be running on port 4000");
+	}
+
+	// Check Puppeteer MCP Server
+	try {
+		const mcpResponse = await fetch("http://localhost:3000/health");
+		if (!mcpResponse.ok)
+			throw new Error("Puppeteer MCP server is not responding");
+	} catch (error) {
+		throw new Error("Puppeteer MCP server must be running on port 3000");
+	}
+
+	console.log("✓ All required services are running");
+}
+
 try {
+	await checkRequiredServices();
+
 	while (true) {
 		const url = await readline.question("URL: ");
 		await orchestrator(url);

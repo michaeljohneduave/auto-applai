@@ -448,16 +448,18 @@ ${JSON.stringify(this.#getTools())}
 
 					// No parallel tool calls for now
 					for (const toolCall of choice.message.tool_calls) {
+						const toolResult = await this.callTool({
+							name: toolCall.function.name,
+							args: toolCall.function.arguments,
+						});
 						params.messages.push({
 							role: "tool",
 							tool_call_id: toolCall.id,
-							content: JSON.stringify(
-								await this.callTool({
-									name: toolCall.function.name,
-									args: toolCall.function.arguments,
-								}),
-							),
+							content: JSON.stringify(toolResult),
 						});
+
+						console.log("Tool Result");
+						console.log("%o", toolResult);
 					}
 				} else {
 					console.error(

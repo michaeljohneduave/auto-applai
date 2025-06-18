@@ -32,7 +32,6 @@ export async function htmlFormCrawler(pageUrl: string) {
 	console.log("Crawling using non mcp puppeteer", pageUrl);
 	const url = new URL("http://localhost:3000/scrape");
 	url.searchParams.set("url", pageUrl);
-	url.searchParams.set("headless", "false");
 	url.searchParams.set("format", "html");
 	url.searchParams.set("screenshot", "true");
 
