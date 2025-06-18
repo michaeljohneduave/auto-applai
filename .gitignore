@@ -1,7 +1,7 @@
 tmp/
-assets/*
+*/assets/*
 node_modules
 .env
 .env.local
-linux-chrome-profile
+linux-chrome-profile*
 .DS_Store
