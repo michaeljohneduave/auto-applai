@@ -1,0 +1,112 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem} % For customizing lists
+\usepackage{titlesec} % For section formatting
+\usepackage[scaled]{helvet}
+
+% % Set page geometry (adjust margins as needed for one page)
+\geometry{left=0.5in, right=0.5in, top=0.5in, bottom=0.5in}
+
+% Remove page numbers
+\pagestyle{empty}
+
+% Define a command for right-aligned text (for dates/locations)
+\newcommand{\rightaligned}[1]{\hfill #1}
+
+% Customize section formatting (reduce spacing)
+\titlespacing*{\section}{0pt}{*2}{*1}
+\titlespacing*{\subsection}{0pt}{*1}{*0.5}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}[\titlerule] % Add rule under section titles
+
+% Customize list spacing
+\setlist[itemize]{leftmargin=*, itemsep=0pt, parsep=0pt, topsep=2pt}
+
+\begin{document}
+
+\begin{center}
+    \textbf{\Large Alex Thompson} \\
+    Burnaby, BC, Canada | \href{mailto:alex.thompson.dev@yopmail.com}{alex.thompson.dev@yopmail.com} | \href{https://alexthompsondev.com}{https://alexthompsondev.com}
+\end{center}
+
+\section*{Skills}
+\begin{itemize}[label={}] % No bullets for skill categories
+    \item \textbf{Languages:} \textbf{TypeScript}, Python, \textbf{Node.js}, SQL
+    \item \textbf{Frameworks \& Libraries:} \textbf{React.js}, Next.js, Svelte, \textbf{Express.js}, tRPC, Tanstack Query/Router,
+      Zustand, Redux, Material UI, \textbf{TailwindCSS}, Chart.js, Zod, Sails.js, \textbf{GraphQL}
+    \item \textbf{Cloud \& Infrastructure:} \textbf{AWS} (Lambda, DynamoDB, EC2, S3, SQS, SNS), Serverless Frameworks
+      (SST, Serverless), Infrastructure as Code (Pulumi, Terraform), \textbf{Docker}, Containerization
+    \item \textbf{Databases \& Data:} PostgreSQL, MongoDB, Redis, Elasticsearch, \textbf{Data Modeling}, ETL Processes,
+      Data Pipelines, Data Integration, Geospatial Data Systems (Redis, OSRM), Web Scraping
+    \item \textbf{Tools \& Practices:} Git, \textbf{CI/CD} (GitHub Actions, Jenkins, CircleCI, Vercel), \textbf{Automated Testing}
+      (Playwright, Cypress, Puppeteer, Jest/Vitest), Monitoring \& Observability (ELK Stack,
+      CloudWatch), \textbf{API Design} (RESTful principles, End-to-End Type Safety), WebSockets, Build Tools
+      (Vite, ESBuild, Webpack), Agile Methodologies
+\end{itemize}
+
+\section*{Experience}
+
+\textbf{Full Stack Developer,} InnovateTech Solutions, San Francisco, CA, USA  \rightaligned{01/2024 - Present}
+\begin{itemize}
+    \item Developed and deployed critical \textbf{customer-facing} front-end components for an enterprise SaaS platform using
+      modern \textbf{React/Typescript} frameworks and build tools within a serverless architecture, boosting user
+      engagement by over 35%.
+    \item Engineered high-performance backend \textbf{API services} and serverless microservices using cloud functions
+      and a scalable RPC framework, facilitating efficient data transfer for reporting and ensuring robust
+      \textbf{automated backend tests}.
+    \item Designed and implemented intuitive user interfaces for administrative portals and
+      mobile-responsive applications utilizing component libraries and state management solutions,
+      translating \textbf{design mockups} into delightful user experiences and improving workflow completion rates by 25%.
+    \item Developed key features for data collection and feedback mechanisms using a component-based UI
+      library and robust APIs, delivering essential insights for strategic planning across the
+      \textbf{entire stack, from data model to UI}.
+\end{itemize}
+\vspace{1mm}
+\textbf{Data Engineer,} DataStream Analytics, Dublin, Ireland             \rightaligned{07/2021 - 12/2023}
+\begin{itemize}
+    \item Optimized cloud expenditure by over 75\% and enhanced data pipeline stability through
+      transitioning from a managed orchestrator to a custom \textbf{software architecture} solution leveraging
+      \textbf{infrastructure-as-code}.
+    \item Accelerated ETL process completion from multiple days to hours by designing a distributed
+      \textbf{data integration architecture} leveraging cloud storage and compute services, demonstrating strong
+      \textbf{data modeling} capabilities.
+    \item Constructed an automated data augmentation system incorporating human validation steps via
+      containerized remote access interfaces, integrating diverse public data sources.
+    \item Led the creation of a dynamic web platform using modern front-end technologies to enable
+      interactive visualization of aggregated data, significantly enhancing stakeholder access to
+      insights and contributing to \textbf{customer-facing products}.
+\end{itemize}
+\vspace{1mm}
+\textbf{Lead Engineer,} Global Systems Inc., Berlin, Germany              \rightaligned{10/2020 - 06/2021}
+\begin{itemize}
+    \item Guided and mentored a cross-functional team of five through a significant system modernization
+      initiative, establishing automated \textbf{CI/CD} workflows and promoting best practices in \textbf{type-safe
+      development} and \textbf{automated testing}.
+    \item Directed the design and scaling of mission-critical transactional and asset tracking systems,
+      achieving over 99.9\% availability during peak operational demands, showcasing expertise in
+      \textbf{software architecture} and performant code.
+    \item Championed \textbf{architectural enhancements} for core components, including location-based services
+      and operational visibility platforms, prioritizing efficiency and resilience.
+\end{itemize}
+\vspace{1mm}
+\textbf{Software Engineer,} Global Systems Inc., Berlin, Germany           \rightaligned{04/2017 - 10/2020}
+\begin{itemize}
+    \item Contributed significantly to the foundational real-time transaction processing platform using
+      event-driven architectures, scaling support from hundreds to tens of thousands of simultaneous
+      entities and hundreds of thousands of daily operations, demonstrating ability to build
+      \textbf{performant code}.
+    \item Developed a high-throughput location intelligence system leveraging in-memory data stores and
+      mapping APIs, boosting service success rates from a low initial percentage to over 80\% and
+      decreasing operational costs by 90\%.
+    \item Built and deployed a centralized logging and monitoring solution with integrated alerting,
+      drastically cutting down critical issue detection and resolution times from hours to minutes.
+    \item Constructed the inaugural asset management dashboard using modern front-end libraries, providing
+      real-time visibility into dozens of key performance indicators for operational teams, serving as a
+      \textbf{customer-facing product} with strong \textbf{UI/UX}.
+\end{itemize}
+
+\section*{Education}
+\textbf{State University of Technology, USA}                                    \rightaligned{2016}\\
+Bachelor of Science in Computer Engineering
+\end{document}
