@@ -134,6 +134,10 @@ export const jobPostingSchema = z.object({
 					placeholder: z
 						.string()
 						.describe("Placeholder text for the input field."),
+					xPathSelector: z
+						.string()
+						.describe("The xpath selector for the field."),
+					cssSelector: z.string().describe("The CSS selector for the field."),
 				})
 				.describe("An individual field within the application form."),
 		)

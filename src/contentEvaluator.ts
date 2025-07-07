@@ -1,8 +1,7 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { z } from "zod";
 import LLM, { SMALL_MODEL } from "./llm.ts";
-import type { jobPostingSchema } from "./schema.ts";
-import { contentEvalSchema } from "./schema.ts";
+import { contentEvalSchema, type jobPostingSchema } from "./schema.ts";
 
 export async function contentEvaluator(
 	urlSet: { url: string; reasoning: string; content: string },
