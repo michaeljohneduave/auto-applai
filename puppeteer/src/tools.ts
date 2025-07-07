@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import * as cheerio from "cheerio";
 import puppeteer, { type Browser, type Page } from "puppeteer";
+import { randomInteger } from "remeda";
 import Turndown from "turndown";
 import { z } from "zod";
 
@@ -39,11 +41,6 @@ export const createBrowser = createTool({
 	execute: async () => {
 		try {
 			const sessionId = crypto.randomUUID();
-			// const browser = await puppeteer.connect({
-			// 	browserURL: "http://127.0.0.1:9222",
-			// 	defaultViewport: null,
-			// });
-
 			const browser = await puppeteer.launch({
 				headless: true,
 				userDataDir: "../linux-chrome-profile",
@@ -58,11 +55,6 @@ export const createBrowser = createTool({
 			});
 
 			browsers.set(sessionId, browser);
-
-			// navigateToTool.enable();
-			// closeBrowserTool.enable();
-			// createBrowserTool.disable();
-
 			return {
 				structuredContent: {
 					status: "success",
@@ -147,12 +139,6 @@ export const navigateTo = createTool({
 				setTimeout(10_000),
 			]);
 
-			// Enable tools for page interaction
-			// clickElementTool.enable();
-			// extractHtmlTool.enable();
-			// extractMarkdownTool.enable();
-			// navigateToTool.disable();
-
 			return {
 				content: [
 					{
@@ -179,82 +165,23 @@ Navigated to ${url}
 	},
 });
 
-export const clickElement = createTool({
-	name: "clickElement",
-	description:
-		"Clicks on an element in the current page of the browser instance using a CSS selector.",
-	schema: {
-		selector: z.string().describe("A valid CSS selector to click on."),
-		sessionId: z
-			.string()
-			.describe("Required session ID to identify the browser context."),
-		// pageId: z
-		// 	.string()
-		// 	.describe(
-		// 		"Required page ID to extract HTML from a specific page in the browser context."
-		// 	),
-	},
-	async execute({ selector, sessionId }) {
-		const page = pageInstances.get(sessionId);
-		if (!page) {
-			return {
-				content: [
-					{
-						type: "text",
-						text: `No page instance found for session ID: ${sessionId}`,
-					},
-				],
-			};
-		}
-
-		await Promise.all([
-			page.click(selector),
-			Promise.race([
-				page.waitForNavigation({
-					waitUntil: "networkidle0",
-				}),
-				setTimeout(10_000),
-			]),
-		]);
-
-		return {
-			content: [
-				{
-					type: "text",
-					text: `Clicked element with selector "${selector}" in browser session ID: ${sessionId}`,
-				},
-			],
-		};
-	},
-});
-
 export const extractHtml = createTool({
 	name: "extractHtml",
-	description:
-		"Extracts the HTML content of the current page in the browser instance. Use this tool if you plan to interact with the web page",
+	description: `
+Extracts the HTML content of the current page in the browser instance.
+Use this tool if you plan to interact with the web page.
+Optionally provide a CSS selector to extract the HTML from a specific element.
+`,
 	schema: {
 		sessionId: z
 			.string()
 			.describe("Required session ID to identify the browser context."),
-		leanMode: z
-			.boolean()
-			.describe(
-				"Only extract the body of the html, reducing the payload and removing unnecessary text. Use this first",
-			),
-		// fullHtml: z
-		// 	.boolean()
-		// 	.optional()
-		// 	.default(false)
-		// 	.describe(
-		// 		"Optional flag to extract the full HTML content including the <html> tag. Defaults to false, which extracts only the body content."
-		// 	),
-		// pageId: z
-		// 	.string()
-		// 	.describe(
-		// 		"Required page ID to extract HTML from a specific page in the browser context."
-		// 	),
+		selector: z
+			.string()
+			.optional()
+			.describe("A valid CSS selector to extract HTML from."),
 	},
-	async execute({ sessionId, leanMode }) {
+	async execute({ sessionId, selector }) {
 		const page = pageInstances.get(sessionId);
 		if (!page) {
 			return {
@@ -268,27 +195,39 @@ export const extractHtml = createTool({
 		}
 
 		const content = await page.content();
+		const $ = cheerio.load(content);
 
-		if (leanMode) {
-			// Keep the body content only
-			const bodyMatch = content.match(/<body[^>]*>([\s\S]*)<\/body>/);
-			if (bodyMatch?.[1]) {
+		if (selector) {
+			const $element = $(selector);
+			if ($element.length === 0) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: bodyMatch[1].trim(),
+							text: `No element found with selector "${selector}"`,
 						},
 					],
 				};
 			}
+
+			return {
+				content: [
+					{
+						type: "text",
+						text: $element.html() || "",
+					},
+				],
+			};
 		}
+
+		// Keep the body content only
+		const body = $("body").html();
 
 		return {
 			content: [
 				{
 					type: "text",
-					text: content,
+					text: body || "",
 				},
 			],
 		};
@@ -333,16 +272,117 @@ export const extractMarkdown = createTool({
 	},
 });
 
+export const clickElement = createTool({
+	name: "clickElement",
+	description:
+		"Clicks on an element in the current page of the browser instance using a CSS selector or xpath selector or fullXPathSelector.",
+	schema: {
+		selector: z
+			.string()
+			.optional()
+			.describe("A valid CSS selector to click on."),
+		xPathSelector: z
+			.string()
+			.optional()
+			.describe("A valid relative xpath selector to click on."),
+		fullXPathSelector: z
+			.string()
+			.optional()
+			.describe("A valid full xpath selector to click on."),
+		sessionId: z
+			.string()
+			.describe("Required session ID to identify the browser context."),
+		coordinates: z
+			.object({
+				x: z.number().describe("X coordinate of the click."),
+				y: z.number().describe("Y coordinate of the click."),
+			})
+			.optional()
+			.describe(
+				"Optional coordinates to click on. Use this if selector fails to click.",
+			),
+	},
+	async execute({ selector, xPathSelector, sessionId, coordinates }) {
+		const page = pageInstances.get(sessionId);
+		if (!page) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `No page instance found for session ID: ${sessionId}`,
+					},
+				],
+			};
+		}
+
+		if (coordinates) {
+			await page.mouse.click(coordinates.x, coordinates.y, {
+				delay: randomInteger(200, 500),
+			});
+		} else if (selector) {
+			await Promise.all([
+				page.locator(selector).click(),
+				Promise.race([
+					page.waitForNavigation({
+						waitUntil: "networkidle0",
+					}),
+					setTimeout(10_000),
+				]),
+			]);
+		} else if (xPathSelector) {
+			await Promise.all([
+				page.locator(`::-p-xpath${xPathSelector}`).click(),
+				Promise.race([
+					page.waitForNavigation({
+						waitUntil: "networkidle0",
+					}),
+					setTimeout(10_000),
+				]),
+			]);
+		} else {
+			return {
+				content: [
+					{
+						type: "text",
+						text: "No selector or xPathSelector provided.",
+					},
+				],
+			};
+		}
+
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Clicked element with selector "${selector}" in browser session ID: ${sessionId}`,
+				},
+			],
+		};
+	},
+});
+
 export const inputText = createTool({
 	name: "inputText",
-	description: "Inputs text into an editable html element",
+	description:
+		"Inputs text into an editable html element, use either selector or xPathSelector or fullXPathSelector",
 	schema: {
 		sessionId: z
 			.string()
 			.describe(
 				"Required session ID to identify the browser context to close.",
 			),
-		selector: z.string().describe("A valid CSS selector to be inputted on."),
+		xPathSelector: z
+			.string()
+			.optional()
+			.describe("A valid relative xpath selector to click on."),
+		fullXPathSelector: z
+			.string()
+			.optional()
+			.describe("A valid full xpath selector to click on."),
+		selector: z
+			.string()
+			.optional()
+			.describe("A valid CSS selector to be inputted on."),
 		text: z.string().describe("The text to be inputted into the element"),
 	},
 	async execute({ sessionId, selector, text }) {
@@ -359,7 +399,10 @@ export const inputText = createTool({
 			};
 		}
 
-		await page.type(selector, text);
+		await page
+			.locator(selector)
+			.setEnsureElementIsInTheViewport(true)
+			.fill(text);
 
 		const value = await page.$eval(selector, (el) => el.value);
 
@@ -388,7 +431,7 @@ export const inputText = createTool({
 export const getInputValue = createTool({
 	name: "getInputValue",
 	description:
-		"Get the html input's text value. Useful for verifying the inputted text to an html element.",
+		"Get the html input's text value. Useful for verifying the inputted text to an html element. Use either selector or xPathSelector or fullXPathSelector",
 	schema: {
 		sessionId,
 		selector: z.string().describe("A valid CSS selector of an element."),
@@ -411,6 +454,67 @@ export const getInputValue = createTool({
 				{
 					type: "text",
 					text: await page.$eval(args.selector, (node) => node.value),
+				},
+			],
+		};
+	},
+});
+
+export const getElementCoordinates = createTool({
+	name: "getElementCoordinates",
+	description: "Get the coordinates of an element",
+	schema: {
+		sessionId,
+		selector: z.string().describe("A valid CSS selector of an element."),
+	},
+	async execute({ sessionId, selector }) {
+		const page = pageInstances.get(sessionId);
+		if (!page) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `No page instance found for page ID: ${sessionId}`,
+					},
+				],
+			};
+		}
+
+		const element = await page.$(selector);
+
+		if (!element) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `No element found with selector "${selector}"`,
+					},
+				],
+			};
+		}
+
+		const boundingBox = await element.boundingBox();
+		if (!boundingBox) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Could not get the coordinates for "${selector}"`,
+					},
+				],
+			};
+		}
+
+		const x =
+			boundingBox.x + randomInteger(boundingBox.width / 2, boundingBox.width);
+		const y =
+			boundingBox.y + randomInteger(boundingBox.height / 2, boundingBox.height);
+
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Coordinates: x: ${x}, y: ${y}`,
 				},
 			],
 		};
@@ -551,6 +655,7 @@ const tools = [
 	createBrowser,
 	navigateTo,
 	clickElement,
+	getElementCoordinates,
 	inputText,
 	getInputValue,
 	extractHtml,
