@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   pandoc-latex:
     build:
@@ -12,6 +10,13 @@ services:
     restart: unless-stopped
 
   puppeteer-mcp:
+    develop:
+      watch:
+      - action: sync+restart
+        path: ./puppeteer/src/
+        target: /app/puppeteer/src/
+        ignore:
+          - node_modules/
     build:
       context: .
       dockerfile: puppeteer/Dockerfile
@@ -19,7 +24,7 @@ services:
       - "3000:80"
     volumes:
       - ./puppeteer/linux-chrome-profile:/app/puppeteer/linux-chrome-profile
-      - ./puppeteer/assets/:/app/puppeteer/assets
+      - ./puppeteer/assets:/app/puppeteer/assets
     environment:
       - NODE_ENV=production
     restart: unless-stopped
