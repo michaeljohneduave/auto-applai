@@ -14,6 +14,7 @@ import type {
 	ChatCompletionMessageParam,
 	ChatCompletionTool,
 } from "openai/resources.mjs";
+import type { ParsedChatCompletion } from "openai/resources/beta/chat/completions.mjs";
 import { randomString } from "remeda";
 import { z } from "zod";
 
@@ -40,6 +41,7 @@ type LLMOptions = {
 	apiKey?: string;
 	baseUrl?: string;
 	parallelToolCalls?: boolean;
+	sessionId?: string;
 };
 
 type NativeTool<T extends z.ZodRawShape> = {
@@ -54,6 +56,7 @@ type NativeTool<T extends z.ZodRawShape> = {
 export const BIG_MODEL = "gemini-2.5-flash-preview-05-20";
 export const SMART_MODEL = "gemini-2.5-pro-preview-06-05";
 export const SMALL_MODEL = "gemini-2.0-flash";
+export const NEW_SMALL_MODEL = "gemini-2.5-flash-lite-preview-06-17";
 
 export const grok = {
 	apiKey: process.env.XAI_API_KEY,
@@ -91,6 +94,7 @@ export default class LLM {
 	#isReady = true;
 	#useEval = false;
 	#parallelToolCalls = false;
+	#sessionId: string;
 
 	constructor(name?: string, options?: LLMOptions) {
 		switch (options?.model) {
@@ -126,6 +130,7 @@ export default class LLM {
 			this.#useEval = options.useEval || this.#useEval;
 			this.#parallelToolCalls =
 				options.parallelToolCalls || this.#parallelToolCalls;
+			this.#sessionId = options.sessionId || randomString(10);
 		}
 	}
 
@@ -257,7 +262,7 @@ export default class LLM {
 		});
 	}
 
-	#getTools() {
+	getTools() {
 		return this.#mcps
 			.flatMap((mcp) =>
 				mcp.tools.map((tool) => ({
@@ -310,7 +315,7 @@ ${JSON.stringify(evalMessages)}
 </messages>
 
 <tools>
-${JSON.stringify(this.#getTools())}
+${JSON.stringify(this.getTools())}
 </tools>
 					`,
 				},
@@ -332,14 +337,16 @@ ${JSON.stringify(this.#getTools())}
 		let completion: ChatCompletion;
 
 		while (true) {
-			completion = await this.#openai.chat.completions.create({
+			const completionParams = {
 				...params,
 				model: this.#model,
-				tools: this.#getTools(),
-			});
+				tools: this.getTools(),
+			};
+
+			completion = await this.#openai.chat.completions.create(completionParams);
 			const [choice] = completion.choices;
 
-			console.log("%o", choice);
+			await this.#logLlmCall(completionParams, completion);
 
 			if (choice.message.tool_calls) {
 				choice.message.tool_calls = choice.message.tool_calls.map((t) => ({
@@ -400,29 +407,57 @@ ${JSON.stringify(this.#getTools())}
 			"response_format"
 		>,
 	) {
+		const totalUsage = {
+			promptTokens: 0,
+			completionTokens: 0,
+		};
+
 		if (Object.values(grok.models).includes(this.#model)) {
-			return this.generateOutput_grok(params);
+			return {
+				completion: await this.generateOutput_grok(params),
+				messages: params.messages,
+			};
 		}
 
 		await this.#waitForReady();
 		let completion: ChatCompletion;
+		let runs = 0;
 
 		while (true) {
-			completion = await this.#openai.chat.completions.create({
+			runs++;
+
+			const completionParams = {
 				...params,
 				model: this.#model,
-				tools: this.#getTools(),
-			});
+				tools: this.getTools(),
+			};
+
+			completion = await this.#openai.chat.completions.create(completionParams);
 			const [choice] = completion.choices;
+
+			if (completion.usage) {
+				totalUsage.promptTokens += completion.usage.prompt_tokens;
+				totalUsage.completionTokens += completion.usage.completion_tokens;
+			}
+
+			await this.#logLlmCall(completionParams, completion);
 
 			if (choice.finish_reason === "stop") {
 				if (this.#useEval) {
 					const response = await this.eval({
-						evalMessages: params.messages,
+						evalMessages: completionParams.messages,
 					});
 
 					console.log(`${this.#name}'s response evaluation`, response);
 				}
+
+				break;
+			}
+
+			if (this.#maxRuns && this.#maxRuns <= runs) {
+				console.log(
+					"Max runs reached, telling the LLM to cleanup if necessary",
+				);
 
 				break;
 			}
@@ -474,7 +509,7 @@ ${JSON.stringify(this.#getTools())}
 			}
 		}
 
-		return completion;
+		return { completion, messages: params.messages };
 	}
 
 	async generateStructuredOutput(
@@ -511,11 +546,15 @@ ${JSON.stringify(this.#getTools())}
 						})),
 					);
 
-				const response = await this.#openai.beta.chat.completions.parse({
+				const completionParams = {
 					...params,
 					model: this.#model,
 					tools,
-				});
+				};
+				const response =
+					await this.#openai.beta.chat.completions.parse(completionParams);
+
+				await this.#logLlmCall(completionParams, response);
 
 				return response;
 			} catch (error) {
@@ -530,6 +569,28 @@ ${JSON.stringify(this.#getTools())}
 		}
 
 		throw new Error("Error processing query: Unable to complete after retries");
+	}
+
+	async #logLlmCall<T>(
+		request: ChatCompletionCreateParamsNonStreaming,
+		response: ParsedChatCompletion<T> | ChatCompletion,
+	) {
+		try {
+			await fetch("http://localhost:4001/log", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					sessionId: this.#sessionId,
+					llmName: this.#name,
+					request,
+					response,
+				}),
+			});
+		} catch (error) {
+			console.error("Failed to log LLM call:", error);
+		}
 	}
 
 	async #waitForReady() {

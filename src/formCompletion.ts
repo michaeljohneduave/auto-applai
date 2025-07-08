@@ -17,15 +17,18 @@ export async function formCompleter({
 	resume,
 	personalInfo,
 	context,
+	sessionId,
 }: {
 	readline: Interface;
 	applicationDetails: z.infer<typeof jobPostingSchema>;
 	resume: string;
 	personalInfo: string;
 	context: string[];
+	sessionId: string;
 }) {
 	const llm = new LLM("form-completer", {
 		model: BIG_MODEL,
+		sessionId,
 	});
 	const clarifications: z.infer<typeof userClarifications> = [];
 	let completedForm: z.infer<typeof formCompleterSchema> = {
@@ -129,7 +132,7 @@ ${applicationDetails.applicationForm}
 			throw new Error("Failed to complete form");
 		}
 
-		console.log("FORM");
+		console.log("Completed Form");
 		console.log("%o", completedForm);
 
 		if (completedForm.clarificationRequests.length) {
@@ -173,6 +176,7 @@ ${JSON.stringify(clarifications)}
 				clarifications,
 				resume,
 				context,
+				sessionId,
 			);
 			const totalScore =
 				evaluation.reduce((acc, evl) => evl.grade + acc, 0) / evaluation.length;

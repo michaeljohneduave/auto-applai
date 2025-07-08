@@ -42,7 +42,7 @@ export async function htmlFormCrawler(pageUrl: string) {
 	const response = await fetch(url.toString());
 	const { data, screenshot } = await response.json();
 	await fs.writeFile(
-		`assets/${pageUrl.replace(/\//g, "-")}.png`,
+		`assets/${new URL(pageUrl).hostname}.png`,
 		Buffer.from(screenshot, "base64"),
 	);
 	const $ = cheerio.load(data);

@@ -14,9 +14,11 @@ export async function evaluator(
 	userAnswers: z.infer<typeof userClarifications>,
 	resume: string,
 	context: string[],
+	sessionId: string,
 ): Promise<z.infer<typeof evaluatorSchema>> {
 	const llm = new LLM("evaluator", {
 		model: BIG_MODEL,
+		sessionId,
 	});
 
 	const response = await llm.generateStructuredOutput({

@@ -372,3 +372,17 @@ export const urlExtractorSchema = z.object({
 export const latexResumeSchema = z.object({
 	resume: z.string().describe("The latex resume"),
 });
+
+export const adjustedResumeSchema = z.object({
+	resume: z.string().describe("The adjusted resume in markdown"),
+	recommendations: z
+		.array(
+			z.object({
+				action: z.string().describe("The recommendation done in the resume"),
+				explaination: z
+					.string()
+					.describe("The explanation, why recommendation was added."),
+			}),
+		)
+		.describe("The recommendations made and added into the resume."),
+});
