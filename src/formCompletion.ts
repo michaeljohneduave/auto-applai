@@ -32,6 +32,7 @@ export async function formCompleter({
 	});
 	const clarifications: z.infer<typeof userClarifications> = [];
 	let completedForm: z.infer<typeof formCompleterSchema> = {
+		coverLetter: "",
 		formAnswers: [],
 		clarificationRequests: [],
 	};
@@ -52,7 +53,7 @@ applications by answering questions directly, incorporating user feedback, or
 requesting clarification when necessary.
 
 # Execution Flow
-Your process is now prioritized into two main stages:
+Your process is now prioritized into three main stages:
 
 **Priority 1: Process User-Provided Answers**
 1.  First, check if the <applicant-clarifications> tag exists and contains
@@ -81,12 +82,17 @@ Your process is now prioritized into two main stages:
 		f. Any explanations would be collated into a relevant text area question.
 		g. Long form responses must be formatted correctly (e.g. have newlines and not just a blob of text)
 
+**Priority 3: Writing an effective cover letter**
+1. After considering all context and information, write a chill and compelling but not over-the-top cover letter addressed to the hiring team/manager.
+2. Refer to the <personal-info> section for cover letter reference.
+3. Do not add any styling (bold, italic) in the cover letter. It should in plain text format
+
 # Example of the Full Feedback Loop
 1. You see an application form and try your best to answer it with relevant context.
 2. If you don't have enough context, ask for clarification.
 3. User adds the clarifications (in <clarification-answers> tags) and you incorporate it to the answers.
 4. An evaluation (in <evaluation> tags) will be done to your answers, if there's any inaccuracies or improvements to be made.
-5. Continue to improve you're answers based on the evaluation
+5. Continue to improve your answers based on the evaluation.
 ---
 
 <job-context>
@@ -124,16 +130,17 @@ ${applicationDetails.applicationForm}
 			response_format: zodResponseFormat(formCompleterSchema, "form-completer"),
 		});
 
-		completedForm = response.choices[0].message.parsed as unknown as z.infer<
+		if (!response.choices[0].message.parsed) {
+			throw new Error("Form completer parsed response not found");
+		}
+
+		completedForm = response.choices[0].message.parsed as z.infer<
 			typeof formCompleterSchema
 		>;
 
 		if (!completedForm) {
 			throw new Error("Failed to complete form");
 		}
-
-		console.log("Completed Form");
-		console.log("%o", completedForm);
 
 		if (completedForm.clarificationRequests.length) {
 			for (const q of completedForm.clarificationRequests) {

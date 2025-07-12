@@ -333,6 +333,7 @@ export const formCompleterSchema = z.object({
 		.describe(
 			"A list of requests for more information. Use this ONLY when the provided context is insufficient to give a complete, high-quality answer. Do not put final answers here.",
 		),
+	coverLetter: z.string().describe("Cover letter for the application"),
 });
 
 export const evaluatorSchema = z.array(
