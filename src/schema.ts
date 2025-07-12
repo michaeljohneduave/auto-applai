@@ -387,3 +387,158 @@ export const adjustedResumeSchema = z.object({
 		)
 		.describe("The recommendations made and added into the resume."),
 });
+
+// A detailed analysis of a single job experience entry from the resume.
+const ExperienceEntrySchema = z.object({
+	jobTitle: z.string().describe("The job title for this experience entry."),
+	company: z.string().describe("The company name for this experience entry."),
+	framingAnalysis: z
+		.string()
+		.describe(
+			"Critique of how well the experience is framed for the target role, especially for non-matching titles.",
+		),
+	prioritizationAnalysis: z
+		.string()
+		.describe(
+			"Analysis of the bullet point order. The most relevant achievement for the target job should be first.",
+		),
+	impactQuantificationAnalysis: z
+		.string()
+		.describe(
+			"Analysis of the use of metrics and quantified achievements. Identify any weak bullet points.",
+		),
+	boldingStrategyAnalysis: z
+		.string()
+		.describe(
+			"Critique of the bolding strategy within this section. Does it highlight the most relevant tech and outcomes sparingly for maximum impact?",
+		),
+});
+
+// The main schema for the entire resume critique output.
+export const resumeCritiqueSchema = z.object({
+	overallGutCheck: z
+		.object({
+			impression: z
+				.string()
+				.describe("A high-level, immediate impression of the resume."),
+			tailoringScore: z
+				.number()
+				.min(1)
+				.max(10)
+				.describe(
+					"A score from 1-10 indicating how well the resume is tailored to the target role.",
+				),
+			strongestPart: z
+				.string()
+				.describe("The single strongest section or aspect of the resume."),
+			weakestLink: z
+				.string()
+				.describe(
+					"The single weakest section or aspect that needs the most improvement.",
+				),
+			boldingEffectiveness: z
+				.string()
+				.describe(
+					"A critique of the overall keyword bolding strategy at a glance (helpful or hindering).",
+				),
+		})
+		.describe(
+			"The overall first impression and high-level analysis of the resume.",
+		),
+
+	professionalSummaryAnalysis: z
+		.object({
+			isFit: z
+				.boolean()
+				.describe(
+					"Does the summary immediately signal that the candidate is a perfect fit?",
+				),
+			mirrorsKeywords: z
+				.boolean()
+				.describe(
+					"Does the summary effectively mirror the language, keywords, and values from the job description?",
+				),
+			boldingStrategy: z
+				.string()
+				.describe(
+					"Critique of the bolding in the summary. Is it strategic or used on generic terms?",
+				),
+			suggestedRevision: z
+				.string()
+				.describe(
+					"A specific, revised version of the summary if it could be more powerful.",
+				),
+		})
+		.describe("Analysis of the professional summary at the top of the resume."),
+
+	skillsSectionReview: z
+		.object({
+			areSkillsVisible: z
+				.boolean()
+				.describe(
+					"Are the most relevant skills (as per the job description) immediately visible?",
+				),
+			isWellOrganized: z
+				.boolean()
+				.describe(
+					"Is the information well-organized for a quick 6-second scan by a recruiter?",
+				),
+			boldingEffectiveness: z
+				.string()
+				.describe(
+					"Critique of the bolding in the skills section. Does it highlight the exact skills from the job requirements without overdoing it?",
+				),
+			suggestedChanges: z
+				.string()
+				.describe(
+					"Recommended changes in ordering or formatting to increase impact.",
+				),
+		})
+		.describe(
+			"Review of the skills section for clarity, organization, and impact.",
+		),
+
+	experienceSectionDeepDive: z
+		.array(ExperienceEntrySchema)
+		.describe(
+			"A detailed, entry-by-entry analysis of the work experience section.",
+		),
+
+	projectsSectionRecommendations: z
+		.object({
+			supportsNarrative: z
+				.boolean()
+				.describe("Do the projects support the main application narrative?"),
+			showcasesPassion: z
+				.boolean()
+				.describe(
+					"Do the projects showcase passion or address any 'plus/nice-to-have' requirements from the job description?",
+				),
+			critique: z
+				.string()
+				.describe(
+					"A critique of the project descriptions, including whether they are results-oriented.",
+				),
+			suggestedImprovements: z
+				.string()
+				.describe(
+					"Recommendations for improvement, such as adding a tech stack with strategic bolding.",
+				),
+		})
+		.describe("Analysis of the personal projects section."),
+
+	finalVerdictAndActionPlan: z
+		.object({
+			summary: z.string().describe("A concluding summary of the findings."),
+			actionItems: z
+				.array(z.string())
+				.min(3)
+				.max(4)
+				.describe(
+					"A concise, prioritized list of the top 3-4 most critical changes the candidate should make. Be verbose and clear about what needs to be changed",
+				),
+		})
+		.describe(
+			"The final summary and a prioritized list of actionable steps for the candidate.",
+		),
+});
