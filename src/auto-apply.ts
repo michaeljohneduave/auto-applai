@@ -7,7 +7,7 @@ import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import { randomString } from "remeda";
 import type { z } from "zod";
 import { llmFormCrawler } from "./crawler.ts";
-import { extractJobInfo } from "./extractJobInfo.ts";
+import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
 import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import {
@@ -15,7 +15,7 @@ import {
 	type jobPostingSchema,
 	latexResumeSchema,
 } from "./schema.ts";
-import { htmlFormCrawler } from "./utils.ts";
+import { htmlCrawler } from "./utils.ts";
 
 const readline = createInterface({
 	input: stdin,
@@ -264,8 +264,8 @@ async function orchestrator(jobUrl: string) {
 		latexReferenceResume,
 		personalInfo,
 	} = await loadApplicationContext();
-	const { html, validLinks, screenshot } = await htmlFormCrawler(jobUrl);
-	const applicationDetails = await extractJobInfo(html, sessionId);
+	const { html, validLinks, screenshot } = await htmlCrawler(jobUrl);
+	const applicationDetails = await extractInfo(html, screenshot, sessionId);
 
 	let formUrl = jobUrl;
 
@@ -289,8 +289,8 @@ async function orchestrator(jobUrl: string) {
 
 		formUrl = crawledUrl.match(urlRegex)?.[0] || jobUrl;
 
-		const { html, screenshot } = await htmlFormCrawler(formUrl);
-		const details = await extractJobInfo(html, sessionId);
+		const { html, screenshot } = await htmlCrawler(formUrl);
+		const details = await extractInfo(html, screenshot, sessionId);
 
 		if (!details.applicationForm.length) {
 			console.log(

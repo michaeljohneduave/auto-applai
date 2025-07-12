@@ -27,7 +27,7 @@ function isSocialMediaOrEmail(url: string): boolean {
 	return socialMediaOrEmail.some((ext) => url.includes(ext));
 }
 
-export async function htmlFormCrawler(pageUrl: string) {
+export async function htmlCrawler(pageUrl: string) {
 	console.log("Crawling using non mcp puppeteer", pageUrl);
 	const url = new URL(`${process.env.PUPPETEER_SERVICE_URL}/scrape`);
 	url.searchParams.set("url", pageUrl);
@@ -78,7 +78,7 @@ export async function htmlFormCrawler(pageUrl: string) {
 	return {
 		validLinks: Array.from(validLinks) as string[],
 		html: $("body").html() || "",
-		screenshot,
+		screenshot: screenshot as string,
 	};
 }
 

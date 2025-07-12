@@ -1,15 +1,16 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { z } from "zod";
-import LLM, { BIG_MODEL } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import { jobPostingSchema } from "./schema.ts";
 
-export async function extractJobInfo(
+export async function extractInfo(
 	html: string,
+	base64Screenshot: string,
 	sessionId: string,
 ): Promise<z.infer<typeof jobPostingSchema>> {
 	console.log("Extracting Job information");
 	const llm = new LLM("JobInfoExtractor", {
-		model: BIG_MODEL,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 
@@ -22,7 +23,7 @@ export async function extractJobInfo(
 You are a senior job posting analyst specializing in structured data extraction.
 
 # Goal
-Extract 100% accurate job application information in structured format.
+Given an image or html, extract 100% accurate job application information in structured format.
 
 # Instructions
 1. Company Information Extraction:
@@ -72,6 +73,14 @@ Strictly follow the jobPostingSchema structure with all required fields.
 			{
 				role: "user",
 				content: html,
+				// content: [
+				// 	{
+				// 		type: "image_url",
+				// 		image_url: {
+				// 			url: `data:image/png;base64,${base64Screenshot}`,
+				// 		},
+				// 	},
+				// ],
 			},
 		],
 		temperature: 0.1,
