@@ -1,12 +1,12 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
-import LLM, { BIG_MODEL, SMALL_MODEL } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH, GEMINI_20_FLASH } from "./llm.ts";
 import { urlExtractorSchema } from "./schema.ts";
 
 export async function llmFormCrawler(pageUrl: string, sessionId: string) {
 	const llm = new LLM("agentic-crawler", {
-		model: SMALL_MODEL,
+		model: GEMINI_20_FLASH,
 		maxRuns: 10,
 		sessionId,
 	});
@@ -69,7 +69,7 @@ ${pageUrl}
 	}
 
 	const llm2 = new LLM("url-extractor", {
-		model: BIG_MODEL,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 

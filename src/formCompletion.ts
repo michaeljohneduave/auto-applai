@@ -3,7 +3,7 @@ import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import { evaluator } from "./evaluator.ts";
-import LLM, { BIG_MODEL } from "./llm.ts";
+import LLM, { GEMINI_25_PRO } from "./llm.ts";
 import {
 	type evaluatorSchema,
 	formCompleterSchema,
@@ -27,7 +27,7 @@ export async function formCompleter({
 	sessionId: string;
 }) {
 	const llm = new LLM("form-completer", {
-		model: BIG_MODEL,
+		model: GEMINI_25_PRO,
 		sessionId,
 	});
 	const clarifications: z.infer<typeof userClarifications> = [];

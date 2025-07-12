@@ -1,6 +1,6 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { z } from "zod";
-import LLM, { BIG_MODEL } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import {
 	evaluatorSchema,
 	type formCompleterSchema,
@@ -17,7 +17,7 @@ export async function evaluator(
 	sessionId: string,
 ): Promise<z.infer<typeof evaluatorSchema>> {
 	const llm = new LLM("evaluator", {
-		model: BIG_MODEL,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 

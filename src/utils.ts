@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import Turndown from "turndown";
 import { z } from "zod";
-import LLM, { BIG_MODEL } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import { cleanedHtmlSchema } from "./schema.ts";
 const turndownService = new Turndown();
 
@@ -92,7 +92,7 @@ export async function htmlToMarkdown(
 ) {
 	const llm = new LLM("html-cleaner", {
 		maxRuns: 1,
-		model: BIG_MODEL,
+		model: GEMINI_25_FLASH,
 	});
 	const $ = cheerio.load(html);
 	if (options?.removeLinks) {

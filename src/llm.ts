@@ -36,6 +36,7 @@ interface MCPStdioConfig extends MCPClientConfig {
 
 type LLMOptions = {
 	model?: string;
+	retries?: number;
 	maxRuns?: number;
 	useEval?: boolean;
 	apiKey?: string;
@@ -53,10 +54,10 @@ type NativeTool<T extends z.ZodRawShape> = {
 	) => CallToolResult | Promise<CallToolResult>;
 };
 
-export const BIG_MODEL = "gemini-2.5-flash-preview-05-20";
-export const SMART_MODEL = "gemini-2.5-pro-preview-06-05";
-export const SMALL_MODEL = "gemini-2.0-flash";
-export const NEW_SMALL_MODEL = "gemini-2.5-flash-lite-preview-06-17";
+export const GEMINI_25_FLASH = "gemini-2.5-flash-preview-05-20";
+export const GEMINI_25_PRO = "gemini-2.5-pro-preview-06-05";
+export const GEMINI_20_FLASH = "gemini-2.0-flash";
+export const GEMINI_25_FLASH_LITE = "gemini-2.5-flash-lite-preview-06-17";
 
 export const grok = {
 	apiKey: process.env.XAI_API_KEY,
@@ -88,7 +89,8 @@ export default class LLM {
 	#tools: NativeTool<z.ZodRawShape>[] = [];
 
 	#openai: OpenAI;
-	#model = SMALL_MODEL; // Default model
+	#model = GEMINI_20_FLASH; // Default model
+	#retries = 3;
 	#maxRuns: number;
 
 	#isReady = true;
@@ -131,6 +133,7 @@ export default class LLM {
 			this.#parallelToolCalls =
 				options.parallelToolCalls || this.#parallelToolCalls;
 			this.#sessionId = options.sessionId || randomString(10);
+			this.#retries = options.retries || this.#retries;
 		}
 	}
 
@@ -516,40 +519,15 @@ ${JSON.stringify(this.getTools())}
 		params: Omit<ChatCompletionCreateParamsNonStreaming, "model"> &
 			Required<Pick<ChatCompletionCreateParamsNonStreaming, "response_format">>,
 	) {
-		let retries = 1;
+		let retries = this.#retries;
 
 		await this.#waitForReady();
 
 		while (retries--) {
 			try {
-				const tools: ChatCompletionTool[] = this.#mcps
-					.flatMap((mcp) =>
-						mcp.tools.map((tool) => ({
-							type: "function" as const,
-							function: {
-								name: tool.name,
-								description: tool.description,
-								strict: true,
-								parameters: tool.parameters,
-							},
-						})),
-					)
-					.concat(
-						this.#tools.map((tool) => ({
-							type: "function" as const,
-							function: {
-								name: tool.name,
-								description: tool.description,
-								strict: true,
-								parameters: tool.parameters,
-							},
-						})),
-					);
-
 				const completionParams = {
 					...params,
 					model: this.#model,
-					tools,
 				};
 				const response =
 					await this.#openai.beta.chat.completions.parse(completionParams);

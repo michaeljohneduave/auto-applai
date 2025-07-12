@@ -9,7 +9,7 @@ import type { z } from "zod";
 import { llmFormCrawler } from "./crawler.ts";
 import { extractJobInfo } from "./extractJobInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
-import LLM, { BIG_MODEL, SMART_MODEL } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import {
 	adjustedResumeSchema,
 	type jobPostingSchema,
@@ -56,7 +56,7 @@ async function resumeAdjuster(
 ) {
 	console.log("Adjusting resume");
 	const llm = new LLM("ResumeBoss", {
-		model: SMART_MODEL,
+		model: GEMINI_25_FLASH,
 		maxRuns: 1,
 		sessionId,
 	});
