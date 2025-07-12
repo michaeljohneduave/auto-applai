@@ -9,6 +9,7 @@ import type { z } from "zod";
 import { llmFormCrawler } from "./crawler.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
+import { formFiller } from "./formFiller.ts";
 import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import {
 	adjustedResumeSchema,
@@ -350,10 +351,21 @@ async function orchestrator(jobUrl: string) {
 	await fs.writeFile(
 		`assets/${companyName}/${sessionId}/adjusted-resume.md`,
 		adjustedResume,
+		{
+			encoding: "utf-8",
+		},
 	);
 	await fs.writeFile(
 		`assets/${companyName}/${sessionId}/application-details.json`,
 		JSON.stringify(applicationDetails),
+	);
+	await fs.writeFile(
+		`assets/${companyName}/${sessionId}/resume-eval.json`,
+		JSON.stringify(resumeEval),
+	);
+	await fs.writeFile(
+		`assets/${companyName}/${sessionId}/screenshot.png`,
+		Buffer.from(screenshot, "base64"),
 	);
 
 	// We try to answer all the questions in the application form
@@ -372,11 +384,25 @@ async function orchestrator(jobUrl: string) {
 		`assets/${companyName}/${sessionId}/completedForm.json`,
 		JSON.stringify(completedForm),
 	);
+	await fs.writeFile(
+		`assets/${companyName}/${sessionId}/completedForm.txt`,
+		Object.entries(completedForm)
+			.map(([key, val]) => `${key}\n${val}`)
+			.join("\n\n"),
+		{
+			encoding: "utf-8",
+		},
+	);
+	await fs.writeFile(
+		`assets/${companyName}/${sessionId}/cover-letter.txt`,
+		Buffer.from(completedForm.coverLetter, "utf-8"),
+	);
 
 	await formFiller({
 		completedForm,
 		url: formUrl,
 		resumePath: `assets/${companyName}/resume.pdf`,
+		sessionId,
 	});
 }
 
