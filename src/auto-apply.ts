@@ -149,13 +149,13 @@ ${toXML(
 }
 
 async function latexResumeGenerator(
-	reference: string,
+	latexResume: string,
 	resume: string,
 	sessionId: string,
 ) {
 	console.log("Generating latex resume");
 	const llm = new LLM("LatexBoss", {
-		model: BIG_MODEL,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 
@@ -166,51 +166,66 @@ async function latexResumeGenerator(
 			{
 				role: "system",
 				content: `
-# Identity
-You are a LaTeX document specialist with expertise in resume formatting.
+You are an expert in converting Markdown resumes to professional LaTeX format. Your goal is to generate a complete, compilable LaTeX document with a clean, modern layout suitable for a tech/engineering resume. Do not include any explanatory text outside the LaTeX code—output only the LaTeX code in a Markdown code block.
 
-# Goal
-Generate perfectly formatted LaTeX resume maintaining layout of the reference.
+Key guidelines:
+- Use the following exact LaTeX preamble to set up the document. Do not modify it unless absolutely necessary for compilation:
+\documentclass[10pt]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage{geometry}
+\\usepackage{hyperref}
+\\usepackage{enumitem} % For customizing lists
+\\usepackage{titlesec} % For section formatting
+\\usepackage[scaled]{helvet}
+\\usepackage[parskip=full-]{parskip} % Use this for clean, automatic spacing
 
-# Instructions
-1. Document Structure:
-   - Use identical document class and packages as reference
-   - Maintain all custom commands and definitions
-   - Preserve margin and spacing settings
-   - Keep exact section formatting
+% Set page geometry
+\geometry{left=0.7in, right=0.7in, top=0.7in, bottom=0.7in}
 
-2. Content Conversion Rules:
-   - Convert markdown bold to \textbf{content}
-   - Convert markdown italics to \textit{content}
-   - Maintain bullet points using reference format
-   - Preserve all whitespace relationships
+% Remove page numbers
+\pagestyle{empty}
 
-3. Required Elements:
-   - Include all reference preamble commands
-   - Maintain document environment structure
-   - Keep all custom styling commands
-   - Preserve reference's section hierarchy
+% Customize section formatting (reduce spacing)
+\titlespacing*{\section}{0pt}{*2}{*1}
+\titlespacing*{\subsection}{0pt}{*1}{*0.5}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}[\titlerule] % Add rule under section titles
 
-4. Validation:
-   - Ensure all brackets are properly closed
-   - Verify special character escaping
-   - Check for required package inclusions
-   - Confirm environment consistency
+% Customize list spacing
+\setlist[itemize]{leftmargin=*, itemsep=0pt, parsep=0pt, topsep=2pt}
 
-# Output Format
-Pure LaTeX code without explanations or markdown.
-        `,
+- After the preamble, start with \begin{document} and end with \end{document}.
+- Parse the Markdown structure step by step:
+  1. **Header**: The first line is typically the name (bolded). Follow it with location, email (as a mailto hyperlink), and website (as a hyperlink). Center this in a \begin{center} block, with the name in \textbf{\Large ...}.
+  2. **Summary**: Any immediate paragraph after the header is a professional summary. Place it directly below the center block, unformatted except for line breaks if needed.
+  3. **Sections**: Use \section*{} for top-level headers like "Skills", "Experience", "Projects", "Education". Add a \titlerule under each.
+  4. **Skills**: Treat as an itemize list with no bullets (use [label={}] ). Bold each subcategory (e.g., \textbf{Languages:}) followed by comma-separated items.
+  5. **Experience**: Each job is a subsection-like entry. Use a minipage{\textwidth} for each, with \textbf{\large Job Title}, Company, Location \hfill Dates. Follow with an itemize list for bullets. Escape special characters like % as \% and $ as \$ in bullets. Add \\ after each minipage (except the last one) to ensure a new line and spacing between experience entries.
+  6. **Projects**: Use a minipage{\textwidth} wrapping all projects. For each, bold the project name followed by a hyperlink if present, then an itemize for descriptions or bullets. Add \\ after each individual project entry inside the minipage for a new line and separation.
+  7. **Education**: For each entry, bold the university and location, \hfill year, then \newline for the degree. No minipage needed unless there are multiple. Add \\ after each education entry for a new line and separation.
+- Layout principles:
+  - Aim for a compact layout, prioritizing readability; allow multiple pages if necessary.
+  - Use \textbf{} for emphasis (e.g., job titles, skill categories).
+  - Handle links with \href{url}{text}.
+  - Preserve Markdown formatting: Bold as \textbf{}, links as hyperlinks, bullets as itemize items.
+  - If dates or locations vary, adapt flexibly (e.g., month/year formats).
+  - Ensure the output is clean and professional, with no unnecessary whitespace or errors. But also use '\vspace{2mm}' for spacing between entries in Experience, Projects, and Education.
+- Think step by step: First, parse the entire Markdown. Then, map each part to LaTeX. Finally, output the full code.
+
+
+Here is a good reference for a berkeley format resume:
+---
+${latexResume}
+---
+
+Convert the following Markdown resume to LaTeX:
+`,
 			},
 			{
 				role: "user",
 				content: `
-<reference-resume>
-${reference}
-</reference-resume>
-
-<adjusted-resume>
+<resume>
 ${resume}
-</adjusted-resume>
+</resume>
         `,
 			},
 		],
