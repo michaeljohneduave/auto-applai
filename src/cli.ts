@@ -14,7 +14,7 @@ try {
 
 	while (true) {
 		const url = await readline.question("URL: ");
-		await orchestrator(sessionId, url);
+		await orchestrator(sessionId, url, readline);
 	}
 } catch (e) {
 	console.error(e);
