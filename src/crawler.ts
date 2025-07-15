@@ -56,8 +56,9 @@ ${pageUrl}
 		},
 	];
 
+	llm.setMessages(messages);
+
 	const { completion: response } = await llm.generateOutput({
-		messages,
 		temperature: 0,
 		top_p: 0.9,
 		// response_format: zodResponseFormat(agenticCrawlerSchema, "agentic-crawler"),
@@ -73,18 +74,19 @@ ${pageUrl}
 		sessionId,
 	});
 
+	llm2.setMessages([
+		{
+			role: "system",
+			content:
+				"You are a strict URL extractor. Given a piece of text, extract the job posting application url.",
+		},
+		{
+			role: "user",
+			content: response.choices[0].message.content,
+		},
+	]);
+
 	const structuredResponse = await llm2.generateStructuredOutput({
-		messages: [
-			{
-				role: "system",
-				content:
-					"You are a strict URL extractor. Given a piece of text, extract the job posting application url.",
-			},
-			{
-				role: "user",
-				content: response.choices[0].message.content,
-			},
-		],
 		temperature: 0,
 		response_format: zodResponseFormat(urlExtractorSchema, "url-extractor"),
 	});

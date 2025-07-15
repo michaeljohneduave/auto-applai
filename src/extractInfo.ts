@@ -1,4 +1,5 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
+import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import { jobPostingSchema } from "./schema.ts";
@@ -14,11 +15,10 @@ export async function extractInfo(
 		sessionId,
 	});
 
-	const response = await llm.generateStructuredOutput({
-		messages: [
-			{
-				role: "system",
-				content: `
+	const messages: ChatCompletionMessageParam[] = [
+		{
+			role: "system",
+			content: `
 # Identity
 You are a senior job posting analyst specializing in structured data extraction.
 
@@ -69,20 +69,24 @@ Strictly follow the jobPostingSchema structure with all required fields.
 - Field types must be correctly classified
 - Form structure must be complete
 `,
-			},
-			{
-				role: "user",
-				content: html,
-				// content: [
-				// 	{
-				// 		type: "image_url",
-				// 		image_url: {
-				// 			url: `data:image/png;base64,${base64Screenshot}`,
-				// 		},
-				// 	},
-				// ],
-			},
-		],
+		},
+		{
+			role: "user",
+			content: html,
+			// content: [
+			// 	{
+			// 		type: "image_url",
+			// 		image_url: {
+			// 			url: `data:image/png;base64,${base64Screenshot}`,
+			// 		},
+			// 	},
+			// ],
+		},
+	];
+
+	llm.setMessages(messages);
+
+	const response = await llm.generateStructuredOutput({
 		temperature: 0.1,
 		reasoning_effort: "high",
 		response_format: zodResponseFormat(jobPostingSchema, "job-info"),

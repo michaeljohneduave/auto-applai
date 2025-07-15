@@ -127,16 +127,22 @@ ${latexResume}
 
 Convert the following Markdown resume to LaTeX:
 `,
-			},
-			{
-				role: "user",
-				content: `
+		},
+		{
+			role: "user",
+			content: `
 <resume>
 ${resume}
 </resume>
         `,
-			},
-		],
+		},
+	];
+
+	llm.setMessages(messages);
+
+	const response = await llm.generateStructuredOutput({
+		temperature: 0.2,
+		top_p: 0.9,
 		response_format: zodResponseFormat(latexResumeSchema, "latex-resume"),
 	});
 

@@ -121,11 +121,12 @@ ${applicationDetails.applicationForm}
 		},
 	];
 
+	llm.setMessages(messages);
+
 	while (true) {
 		const response = await llm.generateStructuredOutput({
 			temperature: 0.3,
 			top_p: 0.9,
-			messages,
 			reasoning_effort: "high",
 			response_format: zodResponseFormat(formCompleterSchema, "form-completer"),
 		});
@@ -205,7 +206,5 @@ ${JSON.stringify(evaluation)}
 		}
 	}
 
-	return {
-		completedForm,
-	};
+	return completedForm;
 }

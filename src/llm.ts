@@ -79,7 +79,6 @@ export const google = {
 
 export default class LLM {
 	#name = "LLM";
-
 	#mcps: Array<{
 		name: string;
 		client: Client;
@@ -90,6 +89,7 @@ export default class LLM {
 
 	#openai: OpenAI;
 	#model = GEMINI_20_FLASH; // Default model
+	#messages: ChatCompletionMessageParam[];
 	#retries = 3;
 	#maxRuns: number;
 
@@ -202,6 +202,14 @@ export default class LLM {
 		);
 	}
 
+	setMessages(messages: ChatCompletionMessageParam[]) {
+		this.#messages = structuredClone(messages);
+	}
+
+	addMessage(message: ChatCompletionMessageParam) {
+		this.#messages.push(message);
+	}
+
 	async callTool({
 		name,
 		args = "{}",
@@ -308,7 +316,7 @@ You are an expert in evaluating LLM workflows and responses
 2. Evaluate the actions of the LLM and in accordance with the instructions and system prompt.
 3. Steer the LLM into the correct path to help them help the user.
 4. There are tools available to the LLM.
-				`,
+        `,
 				},
 				{
 					role: "user",
@@ -320,7 +328,7 @@ ${JSON.stringify(evalMessages)}
 <tools>
 ${JSON.stringify(this.getTools())}
 </tools>
-					`,
+          `,
 				},
 			],
 			temperature: 0.2,
@@ -332,7 +340,7 @@ ${JSON.stringify(this.getTools())}
 
 	async generateOutput_grok(
 		params: Exclude<
-			Omit<ChatCompletionCreateParamsNonStreaming, "model">,
+			Omit<ChatCompletionCreateParamsNonStreaming, "model" | "messages">,
 			"response_format"
 		>,
 	) {
@@ -340,8 +348,9 @@ ${JSON.stringify(this.getTools())}
 		let completion: ChatCompletion;
 
 		while (true) {
-			const completionParams = {
+			const completionParams: ChatCompletionCreateParamsNonStreaming = {
 				...params,
+				messages: this.#messages,
 				model: this.#model,
 				tools: this.getTools(),
 			};
@@ -357,14 +366,7 @@ ${JSON.stringify(this.getTools())}
 					id: t.id || randomString(5),
 				}));
 
-				params.messages.push(choice.message);
-
-				console.log("Tool Calls");
-				console.log(
-					choice.message.tool_calls.map(
-						(t) => `${t.function.name}: ${t.function.arguments}`,
-					),
-				);
+				this.#messages.push(choice.message);
 
 				const toolResults = await Promise.all(
 					choice.message.tool_calls.map(async (toolCall) => {
@@ -378,25 +380,14 @@ ${JSON.stringify(this.getTools())}
 					}),
 				);
 
-				console.log("Tool Results");
-				console.log("%o", toolResults);
-
-				params.messages = params.messages.concat(
-					toolResults.map((res) => ({
+				for (const toolResult of toolResults) {
+					this.#messages.push({
 						role: "tool",
-						tool_call_id: res.id,
-						content: JSON.stringify(res.content),
-					})),
-				);
-			} else if (choice.finish_reason === "stop") {
-				if (this.#useEval) {
-					const response = await this.eval({
-						evalMessages: params.messages,
+						tool_call_id: toolResult.id,
+						content: JSON.stringify(toolResult.content),
 					});
-
-					console.log(`${this.#name}'s response evaluation`, response);
 				}
-
+			} else if (choice.finish_reason === "stop") {
 				break;
 			}
 		}
@@ -406,7 +397,7 @@ ${JSON.stringify(this.getTools())}
 
 	async generateOutput(
 		params: Exclude<
-			Omit<ChatCompletionCreateParamsNonStreaming, "model">,
+			Omit<ChatCompletionCreateParamsNonStreaming, "model" | "messages">,
 			"response_format"
 		>,
 	) {
@@ -418,7 +409,6 @@ ${JSON.stringify(this.getTools())}
 		if (Object.values(grok.models).includes(this.#model)) {
 			return {
 				completion: await this.generateOutput_grok(params),
-				messages: params.messages,
 			};
 		}
 
@@ -429,8 +419,9 @@ ${JSON.stringify(this.getTools())}
 		while (true) {
 			runs++;
 
-			const completionParams = {
+			const completionParams: ChatCompletionCreateParamsNonStreaming = {
 				...params,
+				messages: this.#messages,
 				model: this.#model,
 				tools: this.getTools(),
 			};
@@ -446,14 +437,6 @@ ${JSON.stringify(this.getTools())}
 			await this.#logLlmCall(completionParams, completion);
 
 			if (choice.finish_reason === "stop") {
-				if (this.#useEval) {
-					const response = await this.eval({
-						evalMessages: completionParams.messages,
-					});
-
-					console.log(`${this.#name}'s response evaluation`, response);
-				}
-
 				break;
 			}
 
@@ -475,7 +458,7 @@ ${JSON.stringify(this.getTools())}
 						id: t.id || randomString(5),
 					}));
 
-					params.messages.push(choice.message);
+					this.#messages.push(choice.message);
 
 					console.log("Tool Calls");
 					console.log(
@@ -490,7 +473,7 @@ ${JSON.stringify(this.getTools())}
 							name: toolCall.function.name,
 							args: toolCall.function.arguments,
 						});
-						params.messages.push({
+						this.#messages.push({
 							role: "tool",
 							tool_call_id: toolCall.id,
 							content: JSON.stringify(toolResult),
@@ -512,11 +495,11 @@ ${JSON.stringify(this.getTools())}
 			}
 		}
 
-		return { completion, messages: params.messages };
+		return { completion };
 	}
 
 	async generateStructuredOutput(
-		params: Omit<ChatCompletionCreateParamsNonStreaming, "model"> &
+		params: Omit<ChatCompletionCreateParamsNonStreaming, "model" | "messages"> &
 			Required<Pick<ChatCompletionCreateParamsNonStreaming, "response_format">>,
 	) {
 		let retries = this.#retries;
@@ -525,8 +508,9 @@ ${JSON.stringify(this.getTools())}
 
 		while (retries--) {
 			try {
-				const completionParams = {
+				const completionParams: ChatCompletionCreateParamsNonStreaming = {
 					...params,
+					messages: this.#messages,
 					model: this.#model,
 				};
 				const response =

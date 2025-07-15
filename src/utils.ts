@@ -127,11 +127,10 @@ export async function htmlToMarkdown(
 	$("link").remove();
 	$("meta").remove();
 
-	const response = await llm.generateStructuredOutput({
-		messages: [
-			{
-				role: "system",
-				content: `
+	llm.setMessages([
+		{
+			role: "system",
+			content: `
 # Identity
 You are an expert HTML cleaner
 
@@ -139,12 +138,14 @@ You are an expert HTML cleaner
 1. User will give you an html content and you will clean and remove any css classes and styling that is unrelated to the main content
 2. The goal is to produce a clean html file to be converted markdown but you're only mission is to clean the html.
         `,
-			},
-			{
-				role: "user",
-				content: $("body").html() || "",
-			},
-		],
+		},
+		{
+			role: "user",
+			content: $("body").html() || "",
+		},
+	]);
+
+	const response = await llm.generateStructuredOutput({
 		temperature: 0,
 		top_p: 0.9,
 		reasoning_effort: "low",

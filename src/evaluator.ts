@@ -21,11 +21,10 @@ export async function evaluator(
 		sessionId,
 	});
 
-	const response = await llm.generateStructuredOutput({
-		messages: [
-			{
-				role: "system",
-				content: `
+	llm.setMessages([
+		{
+			role: "system",
+			content: `
 # Identity
 You are an expert in evaluating the sense, correctness and relevance of an answer.
 
@@ -53,10 +52,10 @@ ${resume}
 ${context.join("\n")}
 </company-context>
       `,
-			},
-			{
-				role: "user",
-				content: `
+		},
+		{
+			role: "user",
+			content: `
 <completed-form>
 ${JSON.stringify(completedForm)}
 </completed-form>
@@ -65,8 +64,10 @@ ${JSON.stringify(userAnswers)}
 </personal-answers>
 
       `,
-			},
-		],
+		},
+	]);
+
+	const response = await llm.generateStructuredOutput({
 		temperature: 0.1,
 		top_p: 0.9,
 		response_format: zodResponseFormat(evaluatorSchema, "evaluator"),
