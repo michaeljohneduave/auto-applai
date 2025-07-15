@@ -424,9 +424,9 @@ export const resumeCritiqueSchema = z.object({
 			tailoringScore: z
 				.number()
 				.min(1)
-				.max(10)
+				.max(100)
 				.describe(
-					"A score from 1-10 indicating how well the resume is tailored to the target role.",
+					"A score from 1-100 indicating how well the resume is tailored to the target role.",
 				),
 			strongestPart: z
 				.string()
