@@ -1,12 +1,12 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
-import LLM, { GEMINI_25_FLASH, GEMINI_20_FLASH } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
 import { urlExtractorSchema } from "./schema.ts";
 
 export async function llmFormCrawler(pageUrl: string, sessionId: string) {
 	const llm = new LLM("agentic-crawler", {
-		model: GEMINI_20_FLASH,
+		model: GEMINI_25_FLASH_LITE,
 		maxRuns: 10,
 		sessionId,
 	});
@@ -41,6 +41,7 @@ Find the primary job application form URL with 100% accuracy.
    - Skip external domains except approved job platforms
 4. Return exactly one URL in this format:
    <form-url>https://example.com/apply</form-url>
+5. Wrap up the process by *ALWAYS* calling the close browser tool.
 
 # Output Format
 Single URL wrapped in form-url tags. No other text.
@@ -60,7 +61,6 @@ ${pageUrl}
 
 	const { completion: response } = await llm.generateOutput({
 		temperature: 0,
-		top_p: 0.9,
 		// response_format: zodResponseFormat(agenticCrawlerSchema, "agentic-crawler"),
 	});
 

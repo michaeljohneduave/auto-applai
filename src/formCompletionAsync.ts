@@ -63,7 +63,7 @@ Your process is now prioritized into three main stages:
     b.  Take the userAnswer and treat it as the primary source of truth to
         resolve that question.
     c.  Synthesize this new information with the existing context (<applicant-resume>,
-        <job-context>) to create a final, high-quality answer.
+        <job-context>, <personal-info>) to create a final, high-quality answer.
     d.  Place the completed question and its new answer into the
         formAnswers array in your JSON output.
 
@@ -171,7 +171,7 @@ ${applicationDetails.applicationForm}
 				});
 			}
 
-			messages.push({
+			llm.addMessage({
 				role: "assistant",
 				content: `
 <form-answers>
@@ -184,7 +184,7 @@ ${JSON.stringify(completedForm.clarificationRequests)}
 				`,
 			});
 
-			messages.push({
+			llm.addMessage({
 				role: "user",
 				content: `
 <clarification-answers>
@@ -210,7 +210,7 @@ ${JSON.stringify(clarifications)}
 			const totalScore =
 				evaluation.reduce((acc, evl) => evl.grade + acc, 0) / evaluation.length;
 
-			messages.push({
+			llm.addMessage({
 				role: "user",
 				content: `
 <evaluation>

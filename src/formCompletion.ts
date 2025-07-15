@@ -1,9 +1,10 @@
 import type { Interface } from "node:readline/promises";
+import { toXML } from "jstoxml";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import { evaluator } from "./evaluator.ts";
-import LLM, { GEMINI_25_PRO } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH, GEMINI_25_PRO } from "./llm.ts";
 import {
 	type evaluatorSchema,
 	formCompleterSchema,
@@ -27,7 +28,7 @@ export async function formCompleter({
 	sessionId: string;
 }) {
 	const llm = new LLM("form-completer", {
-		model: GEMINI_25_PRO,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 	const clarifications: z.infer<typeof userClarifications> = [];
@@ -96,7 +97,11 @@ Your process is now prioritized into three main stages:
 ---
 
 <job-context>
-${JSON.stringify(applicationDetails)}
+${toXML({
+	companyInfo: applicationDetails.companyInfo,
+	jobInfo: applicationDetails.jobInfo,
+	applicationSteps: applicationDetails.applicationSteps,
+})}
 </job-context>
 
 <applicant-resume>
@@ -116,7 +121,7 @@ ${context.join("\n")}
 			role: "user",
 			content: `
 Help me answer this form.
-${applicationDetails.applicationForm}
+${toXML(applicationDetails.applicationForm)}
 			`,
 		},
 	];
@@ -156,24 +161,24 @@ ${applicationDetails.applicationForm}
 				});
 			}
 
-			messages.push({
+			llm.addMessage({
 				role: "assistant",
 				content: `
 <form-answers>
-${JSON.stringify(completedForm.formAnswers)}
+${toXML(completedForm.formAnswers)}
 </form-answers>
 
 <clarification-requests>
-${JSON.stringify(completedForm.clarificationRequests)}
+${toXML(completedForm.clarificationRequests)}
 </clarification-requests>
 				`,
 			});
 
-			messages.push({
+			llm.addMessage({
 				role: "user",
 				content: `
 <clarification-answers>
-${JSON.stringify(clarifications)}
+${toXML(clarifications)}
 </clarification-answers>
 				`,
 			});
@@ -189,11 +194,11 @@ ${JSON.stringify(clarifications)}
 			const totalScore =
 				evaluation.reduce((acc, evl) => evl.grade + acc, 0) / evaluation.length;
 
-			messages.push({
+			llm.addMessage({
 				role: "user",
 				content: `
 <evaluation>
-${JSON.stringify(evaluation)}
+${toXML(evaluation)}
 </evaluation>
         `,
 			});
