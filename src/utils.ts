@@ -28,7 +28,7 @@ function isSocialMediaOrEmail(url: string): boolean {
 }
 
 export async function htmlCrawler(pageUrl: string) {
-	console.log("Crawling using non mcp puppeteer", pageUrl);
+	console.log("Crawling using regular puppeteer", pageUrl);
 	const url = new URL(`${process.env.PUPPETEER_SERVICE_URL}/scrape`);
 	url.searchParams.set("url", pageUrl);
 	url.searchParams.set("format", "html");
@@ -41,10 +41,16 @@ export async function htmlCrawler(pageUrl: string) {
 
 	const response = await fetch(url.toString());
 	const { data, screenshot } = await response.json();
-	await fs.writeFile(
-		`assets/${new URL(pageUrl).hostname}.png`,
-		Buffer.from(screenshot, "base64"),
-	);
+
+	if (screenshot) {
+		await fs.writeFile(
+			`assets/${new URL(pageUrl).hostname}.png`,
+			Buffer.from(screenshot, "base64"),
+		);
+	} else {
+		console.warn("No screenshot found for ", pageUrl);
+	}
+
 	const $ = cheerio.load(data);
 
 	const links = $("a")
