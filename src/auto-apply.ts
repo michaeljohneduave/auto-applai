@@ -1,11 +1,16 @@
 import fs from "node:fs/promises";
+import type { Interface } from "node:readline/promises";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
+import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import { llmFormCrawler } from "./crawler.ts";
 import { extractInfo } from "./extractInfo.ts";
-import { evalResume, generateResume } from "./generateResume.ts";
+import { formCompleter } from "./formCompletion.ts";
+import { formCompleterAsync } from "./formCompletionAsync.ts";
+import { generateResumeIterative } from "./generateResume.ts";
 import LLM, { GEMINI_25_FLASH } from "./llm.ts";
-import { type jobPostingSchema, latexResumeSchema } from "./schema.ts";
+import { type formCompleterSchema, latexResumeSchema } from "./schema.ts";
+import { sessionManager } from "./sessionManager.ts";
 import { htmlCrawler } from "./utils.ts";
 
 const urlRegex =
@@ -31,31 +36,6 @@ async function generatePdf(latexResume: string) {
 	return response.arrayBuffer();
 }
 
-async function adjustResume(
-	resumeMd: string,
-	applicationDetails: z.infer<typeof jobPostingSchema>,
-	sessionId: string,
-) {
-	const adjustedResume = await generateResume(
-		resumeMd,
-		applicationDetails,
-		sessionId,
-	);
-	const evaluation = await evalResume(
-		adjustedResume.response.resume,
-		resumeMd,
-		applicationDetails,
-		sessionId,
-	);
-
-	evaluation.finalVerdictAndActionPlan.actionItems;
-
-	return {
-		adjustedResume: adjustedResume.response.resume,
-		resumeEval: evaluation,
-	};
-}
-
 async function latexResumeGenerator(
 	latexResume: string,
 	resume: string,
@@ -67,13 +47,10 @@ async function latexResumeGenerator(
 		sessionId,
 	});
 
-	const response = await llm.generateStructuredOutput({
-		temperature: 0.2,
-		top_p: 0.9,
-		messages: [
-			{
-				role: "system",
-				content: `
+	const messages: ChatCompletionMessageParam[] = [
+		{
+			role: "system",
+			content: `
 You are an expert in converting Markdown resumes to professional LaTeX format. Your goal is to generate a complete, compilable LaTeX document with a clean, modern layout suitable for a tech/engineering resume. Do not include any explanatory text outside the LaTeX code—output only the LaTeX code in a Markdown code block.
 
 Key guidelines:
@@ -180,10 +157,11 @@ async function loadApplicationContext() {
 	}
 }
 
-export async function orchestrator(sessionId: string, jobUrl: string) {
-	const { sessionManager } = await import("./sessionManager.ts");
-	const { formCompleterAsync } = await import("./formCompletionAsync.ts");
-
+export async function orchestrator(
+	sessionId: string,
+	jobUrl: string,
+	readline?: Interface,
+) {
 	try {
 		sessionManager.updateProgress(
 			sessionId,
@@ -255,11 +233,8 @@ export async function orchestrator(sessionId: string, jobUrl: string) {
 			"generating_resume",
 			"Generating tailored resume...",
 		);
-		const { adjustedResume, resumeEval } = await adjustResume(
-			ogResumeMd,
-			applicationDetails,
-			sessionId,
-		);
+		const { adjustedResume, generatedEvals, generatedResumes } =
+			await generateResumeIterative(ogResumeMd, applicationDetails, sessionId);
 
 		if (!adjustedResume) {
 			throw new Error("Updated resume not generated");
@@ -298,14 +273,29 @@ export async function orchestrator(sessionId: string, jobUrl: string) {
 		await fs.writeFile(`${assetPath}/adjusted-resume.md`, adjustedResume, {
 			encoding: "utf-8",
 		});
+
+		for (let i = 0; i < generatedResumes.length; i++) {
+			await fs.writeFile(
+				`${assetPath}/generated-resume-${i + 1}.md`,
+				generatedResumes[i],
+				{
+					encoding: "utf-8",
+				},
+			);
+		}
+
+		for (let i = 0; i < generatedEvals.length; i++) {
+			await fs.writeFile(
+				`${assetPath}/resume-eval-${i + 1}.json`,
+				JSON.stringify(generatedEvals[i]),
+			);
+		}
+
 		await fs.writeFile(
 			`${assetPath}/application-details.json`,
 			JSON.stringify(applicationDetails),
 		);
-		await fs.writeFile(
-			`${assetPath}/resume-eval.json`,
-			JSON.stringify(resumeEval),
-		);
+
 		await fs.writeFile(
 			`${assetPath}/screenshot.png`,
 			Buffer.from(screenshot, "base64"),
@@ -315,48 +305,73 @@ export async function orchestrator(sessionId: string, jobUrl: string) {
 		sessionManager.updateSession(sessionId, {
 			companyName,
 			adjustedResume,
-			resumeEval,
 			latexResume,
 			latexPdf: Buffer.from(latexPdf),
 			formUrl,
 			assetPath,
 		});
 
-		// Complete form with interactive clarifications
-		const { completedForm } = await formCompleterAsync({
-			sessionId,
-			applicationDetails,
-			resume: ogResumeMd,
-			personalInfo,
-			context: mdContent.map((md) => md.markdown),
-		});
+		let completedForm: z.infer<typeof formCompleterSchema> | null = null;
 
-		// Save completed form
-		await fs.writeFile(
-			`${assetPath}/completedForm.json`,
-			JSON.stringify(completedForm),
-		);
-		await fs.writeFile(
-			`${assetPath}/completedForm.txt`,
-			Object.entries(completedForm)
-				.map(([key, val]) => `${key}\n${val}`)
-				.join("\n\n"),
-			{ encoding: "utf-8" },
-		);
-		await fs.writeFile(
-			`${assetPath}/cover-letter.txt`,
-			completedForm.coverLetter,
-			{ encoding: "utf-8" },
-		);
+		if (applicationDetails.applicationForm.length) {
+			// Complete form with interactive clarifications
 
-		sessionManager.updateSession(sessionId, { completedForm });
+			if (readline) {
+				completedForm = await formCompleter({
+					sessionId,
+					readline,
+					applicationDetails,
+					resume: ogResumeMd,
+					personalInfo,
+					context: mdContent.map((md) => md.markdown),
+				});
+			} else {
+				completedForm = await formCompleterAsync({
+					sessionId,
+					applicationDetails,
+					resume: ogResumeMd,
+					personalInfo,
+					context: mdContent.map((md) => md.markdown),
+				});
+			}
+
+			// Save completed form
+			await fs.writeFile(
+				`${assetPath}/completedForm.json`,
+				JSON.stringify(completedForm),
+			);
+			await fs.writeFile(
+				`${assetPath}/completedForm.txt`,
+				`
+					formAnswers:
+					${Object.entries(completedForm.formAnswers)
+						.map(([key, val]) => `${key}\n${val}`)
+						.join("\n\n")}
+
+					clarificationRequests:
+					${Object.entries(completedForm.clarificationRequests)
+						.map(([key, val]) => `${key}\n${val}`)
+						.join("\n\n")}
+
+					coverLetter:
+					${Object.entries(completedForm.coverLetter)}
+				`,
+				{ encoding: "utf-8" },
+			);
+			await fs.writeFile(
+				`${assetPath}/cover-letter.txt`,
+				completedForm.coverLetter,
+				{ encoding: "utf-8" },
+			);
+
+			sessionManager.updateSession(sessionId, { completedForm });
+		}
 
 		const result = {
 			sessionId,
 			companyName,
 			applicationDetails,
 			adjustedResume,
-			resumeEval,
 			latexResume,
 			latexPdf: Buffer.from(latexPdf),
 			screenshot: Buffer.from(screenshot, "base64"),
@@ -399,6 +414,3 @@ export async function checkRequiredServices() {
 
 	console.log("✓ All required services are running");
 }
-
-// Export helper functions for use in server
-export { generatePdf, loadApplicationContext };
