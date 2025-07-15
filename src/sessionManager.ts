@@ -1,6 +1,10 @@
 import { EventEmitter } from "node:events";
 import type { z } from "zod";
-import type { jobPostingSchema, formCompleterSchema, resumeCritiqueSchema } from "./schema.ts";
+import type {
+	formCompleterSchema,
+	jobPostingSchema,
+	resumeCritiqueSchema,
+} from "./schema.ts";
 
 export interface SessionData {
 	sessionId: string;
@@ -49,14 +53,17 @@ class SessionManager extends EventEmitter {
 		};
 
 		this.sessions.set(sessionId, session);
-		
+
 		// Auto-cleanup session after 1 hour
-		const timeout = setTimeout(() => {
-			this.cleanupSession(sessionId);
-		}, 60 * 60 * 1000);
-		
+		const timeout = setTimeout(
+			() => {
+				this.cleanupSession(sessionId);
+			},
+			60 * 60 * 1000,
+		);
+
 		this.sessionTimeouts.set(sessionId, timeout);
-		
+
 		return session;
 	}
 
@@ -76,14 +83,19 @@ class SessionManager extends EventEmitter {
 		this.emit(`session:${sessionId}`, event);
 	}
 
-	waitForClarification(sessionId: string, questions: Array<{
-		questionForUser: string;
-		originalQuestion: string;
-	}>): Promise<Array<{
-		originalQuestion: string;
-		questionForUser: string;
-		answer: string;
-	}>> {
+	waitForClarification(
+		sessionId: string,
+		questions: Array<{
+			questionForUser: string;
+			originalQuestion: string;
+		}>,
+	): Promise<
+		Array<{
+			originalQuestion: string;
+			questionForUser: string;
+			answer: string;
+		}>
+	> {
 		return new Promise((resolve) => {
 			this.updateSession(sessionId, {
 				status: "awaiting_input",
@@ -96,11 +108,13 @@ class SessionManager extends EventEmitter {
 			});
 
 			// Listen for clarification answers
-			const handler = (answers: Array<{
-				originalQuestion: string;
-				questionForUser: string;
-				answer: string;
-			}>) => {
+			const handler = (
+				answers: Array<{
+					originalQuestion: string;
+					questionForUser: string;
+					answer: string;
+				}>,
+			) => {
 				this.updateSession(sessionId, {
 					status: "processing",
 					clarificationAnswers: answers,
@@ -113,11 +127,14 @@ class SessionManager extends EventEmitter {
 		});
 	}
 
-	provideClarification(sessionId: string, answers: Array<{
-		originalQuestion: string;
-		questionForUser: string;
-		answer: string;
-	}>): void {
+	provideClarification(
+		sessionId: string,
+		answers: Array<{
+			originalQuestion: string;
+			questionForUser: string;
+			answer: string;
+		}>,
+	): void {
 		this.emit(`clarification:${sessionId}`, answers);
 	}
 
@@ -132,9 +149,12 @@ class SessionManager extends EventEmitter {
 		});
 
 		// Clean up after a delay
-		setTimeout(() => {
-			this.cleanupSession(sessionId);
-		}, 5 * 60 * 1000); // 5 minutes
+		setTimeout(
+			() => {
+				this.cleanupSession(sessionId);
+			},
+			5 * 60 * 1000,
+		); // 5 minutes
 	}
 
 	failSession(sessionId: string, error: string): void {
@@ -149,9 +169,12 @@ class SessionManager extends EventEmitter {
 		});
 
 		// Clean up after a delay
-		setTimeout(() => {
-			this.cleanupSession(sessionId);
-		}, 5 * 60 * 1000); // 5 minutes
+		setTimeout(
+			() => {
+				this.cleanupSession(sessionId);
+			},
+			5 * 60 * 1000,
+		); // 5 minutes
 	}
 
 	updateProgress(sessionId: string, step: string, message?: string): void {
