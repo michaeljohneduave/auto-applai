@@ -609,7 +609,8 @@ export const uploadFile = createTool({
 
 export const closeBrowser = createTool({
 	name: "closeBrowser",
-	description: "Closes the browser instance and removes it from the server.",
+	description:
+		"Closes the browser instance and removes it from the server. Always call this tool to wrap up the session.",
 	schema: {
 		sessionId: z
 			.string()
