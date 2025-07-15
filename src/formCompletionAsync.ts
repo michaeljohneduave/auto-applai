@@ -36,7 +36,11 @@ export async function formCompleterAsync({
 	};
 	let evaluation: z.infer<typeof evaluatorSchema> = [];
 
-	sessionManager.updateProgress(sessionId, "form_completion", "Starting form completion...");
+	sessionManager.updateProgress(
+		sessionId,
+		"form_completion",
+		"Starting form completion...",
+	);
 
 	const messages: ChatCompletionMessageParam[] = [
 		{
@@ -118,12 +122,17 @@ ${applicationDetails.applicationForm}
 	];
 
 	while (true) {
-		sessionManager.updateProgress(sessionId, "form_completion", "Generating form responses...");
+		sessionManager.updateProgress(
+			sessionId,
+			"form_completion",
+			"Generating form responses...",
+		);
+
+		llm.setMessages(messages);
 
 		const response = await llm.generateStructuredOutput({
 			temperature: 0.3,
 			top_p: 0.9,
-			messages,
 			reasoning_effort: "high",
 			response_format: zodResponseFormat(formCompleterSchema, "form-completer"),
 		});
@@ -141,12 +150,16 @@ ${applicationDetails.applicationForm}
 		}
 
 		if (completedForm.clarificationRequests.length) {
-			sessionManager.updateProgress(sessionId, "awaiting_clarification", "Waiting for user input...");
+			sessionManager.updateProgress(
+				sessionId,
+				"awaiting_clarification",
+				"Waiting for user input...",
+			);
 
 			// Wait for clarification from user via session manager
 			const userAnswers = await sessionManager.waitForClarification(
 				sessionId,
-				completedForm.clarificationRequests
+				completedForm.clarificationRequests,
 			);
 
 			// Convert user answers to the expected format
@@ -180,7 +193,11 @@ ${JSON.stringify(clarifications)}
 				`,
 			});
 		} else {
-			sessionManager.updateProgress(sessionId, "form_evaluation", "Evaluating form responses...");
+			sessionManager.updateProgress(
+				sessionId,
+				"form_evaluation",
+				"Evaluating form responses...",
+			);
 
 			evaluation = await evaluator(
 				applicationDetails,
@@ -203,7 +220,11 @@ ${JSON.stringify(evaluation)}
 			});
 
 			if (totalScore < 5) {
-				sessionManager.updateProgress(sessionId, "form_improvement", "Improving form responses based on evaluation...");
+				sessionManager.updateProgress(
+					sessionId,
+					"form_improvement",
+					"Improving form responses based on evaluation...",
+				);
 				continue;
 			}
 
@@ -211,7 +232,5 @@ ${JSON.stringify(evaluation)}
 		}
 	}
 
-	return {
-		completedForm,
-	};
+	return completedForm;
 }
