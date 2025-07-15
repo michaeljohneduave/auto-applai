@@ -341,24 +341,6 @@ export async function orchestrator(
 				JSON.stringify(completedForm),
 			);
 			await fs.writeFile(
-				`${assetPath}/completedForm.txt`,
-				`
-					formAnswers:
-					${Object.entries(completedForm.formAnswers)
-						.map(([key, val]) => `${key}\n${val}`)
-						.join("\n\n")}
-
-					clarificationRequests:
-					${Object.entries(completedForm.clarificationRequests)
-						.map(([key, val]) => `${key}\n${val}`)
-						.join("\n\n")}
-
-					coverLetter:
-					${Object.entries(completedForm.coverLetter)}
-				`,
-				{ encoding: "utf-8" },
-			);
-			await fs.writeFile(
 				`${assetPath}/cover-letter.txt`,
 				completedForm.coverLetter,
 				{ encoding: "utf-8" },

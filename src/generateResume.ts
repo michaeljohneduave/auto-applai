@@ -119,7 +119,7 @@ export async function generateResumeIterative(
 		sessionId,
 	});
 	const evalLLM = new LLM("resume-evaluator", {
-		model: GEMINI_25_FLASH,
+		model: GEMINI_25_PRO,
 		sessionId,
 	});
 
@@ -128,7 +128,8 @@ export async function generateResumeIterative(
 
 	const generatedResumes: string[] = [];
 	const generatedEvals: z.infer<typeof resumeCritiqueSchema>[] = [];
-	const messages: ChatCompletionMessageParam[] = [
+
+	resumeLLM.setMessages([
 		{
 			role: "system",
 			content: generateResumeSystemPrompt,
@@ -148,8 +149,7 @@ ${JSON.stringify({
 </application-details>
 `,
 		},
-	];
-	resumeLLM.setMessages(messages);
+	]);
 
 	evalLLM.setMessages([
 		{
