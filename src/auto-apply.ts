@@ -2,16 +2,21 @@ import fs from "node:fs/promises";
 import type { Interface } from "node:readline/promises";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
+import { toKebabCase } from "remeda";
 import type { z } from "zod";
 import { llmFormCrawler } from "./crawler.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
 import { formCompleterAsync } from "./formCompletionAsync.ts";
 import { generateResumeIterative } from "./generateResume.ts";
-import LLM, { GEMINI_25_FLASH } from "./llm.ts";
-import { type formCompleterSchema, latexResumeSchema } from "./schema.ts";
+import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
+import {
+	type formCompleterSchema,
+	latexResumeSchema,
+	personalInfoSchema,
+} from "./schema.ts";
 import { sessionManager } from "./sessionManager.ts";
-import { htmlCrawler } from "./utils.ts";
+import { htmlCrawler, isoFileSuffixUTC } from "./utils.ts";
 
 const urlRegex =
 	/\b(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff-]{0,61})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,63}))(?::\d{2,5})?(?:[/?#]\S*)?/giu;
@@ -127,9 +132,9 @@ ${resume}
 	return parsed.resume;
 }
 
-async function loadApplicationContext() {
+async function loadApplicationContext(sessionId: string) {
 	try {
-		const [resume, latexReferenceResume, personalInfo] = await Promise.all([
+		const [resume, latexReferenceResume, personalMetadata] = await Promise.all([
 			fs.readFile("assets/resume.md", "utf-8").catch(() => {
 				throw new Error(
 					"Resume file not found. Please ensure assets/resume.md exists.",
@@ -143,7 +148,50 @@ async function loadApplicationContext() {
 			}),
 		]);
 
-		return { resume, latexReferenceResume, personalInfo };
+		const llm = new LLM("personalInfo", {
+			model: GEMINI_25_FLASH_LITE,
+			sessionId,
+		});
+
+		llm.setMessages([
+			{
+				role: "system",
+				content: `
+You are an information extractor. Your job is to read the candidate's resume and personal‐info sections. 
+`,
+			},
+			{
+				role: "user",
+				content: `
+<resume>
+${resume}
+</resume>
+
+<personal-info>
+${personalMetadata}
+</personal-info>
+`,
+			},
+		]);
+
+		const response = await llm.generateStructuredOutput({
+			temperature: 0,
+			top_p: 0.9,
+			response_format: zodResponseFormat(
+				personalInfoSchema,
+				"personalInfoSchema",
+			),
+		});
+
+		if (!response.choices[0].message.parsed) {
+			throw new Error("Unable to parse personal info");
+		}
+
+		const personalInfo = response.choices[0].message.parsed as z.infer<
+			typeof personalInfoSchema
+		>;
+
+		return { resume, latexReferenceResume, personalMetadata, personalInfo };
 	} catch (error) {
 		console.error("Failed to load application context:", error);
 		throw error;
@@ -172,7 +220,8 @@ export async function orchestrator(
 			resume: ogResumeMd,
 			latexReferenceResume,
 			personalInfo,
-		} = await loadApplicationContext();
+			personalMetadata,
+		} = await loadApplicationContext(sessionId);
 
 		sessionManager.updateProgress(
 			sessionId,
@@ -252,7 +301,7 @@ export async function orchestrator(
 		const latexPdf = await generatePdf(latexResume);
 
 		const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
-		const assetPath = `assets/${companyName}/${sessionId}`;
+		const assetPath = `assets/${companyName}/${sessionId}-${isoFileSuffixUTC()}`;
 
 		// Save assets
 		sessionManager.updateProgress(
@@ -261,7 +310,10 @@ export async function orchestrator(
 			"Saving generated assets...",
 		);
 		await fs.mkdir(assetPath, { recursive: true });
-		await fs.writeFile(`${assetPath}/resume.pdf`, Buffer.from(latexPdf));
+		await fs.writeFile(
+			`${assetPath}/${toKebabCase(personalInfo.fullName)}-${applicationDetails.companyInfo.name.toLowerCase()}-resume.pdf`,
+			Buffer.from(latexPdf),
+		);
 		await fs.writeFile(`${assetPath}/resume.tex`, latexResume);
 		await fs.writeFile(`${assetPath}/adjusted-resume.md`, adjustedResume, {
 			encoding: "utf-8",
@@ -315,7 +367,7 @@ export async function orchestrator(
 					readline,
 					applicationDetails,
 					resume: ogResumeMd,
-					personalInfo,
+					personalMetadata,
 					context: mdContent.map((md) => md.markdown),
 				});
 			} else {
@@ -323,7 +375,7 @@ export async function orchestrator(
 					sessionId,
 					applicationDetails,
 					resume: ogResumeMd,
-					personalInfo,
+					personalMetadata,
 					context: mdContent.map((md) => md.markdown),
 				});
 			}

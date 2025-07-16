@@ -16,14 +16,14 @@ export async function formCompleter({
 	readline,
 	applicationDetails,
 	resume,
-	personalInfo,
+	personalMetadata,
 	context,
 	sessionId,
 }: {
 	readline: Interface;
 	applicationDetails: z.infer<typeof jobPostingSchema>;
 	resume: string;
-	personalInfo: string;
+	personalMetadata: string;
 	context: string[];
 	sessionId: string;
 }) {
@@ -109,7 +109,7 @@ ${resume}
 </applicant-resume>
 
 <personal-info>
-${personalInfo}
+${personalMetadata}
 </personal-info>
 
 <company-context>

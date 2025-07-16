@@ -99,6 +99,25 @@ export const contentEvalSchema = z.object({
 		),
 });
 
+export const personalInfoSchema = z.object({
+	fullName: z.string(),
+	email: z.string().email(),
+	phoneNumber: z.string(),
+	address: z.object({
+		street: z.string(),
+		city: z.string(),
+		region: z.string(),
+		postalCode: z.string(),
+		country: z.string(),
+	}),
+	profiles: z.object({
+		linkedin: z.string().url(),
+		github: z.string().url(),
+		website: z.string().url(),
+	}),
+	timezones: z.array(z.string()),
+});
+
 export const jobPostingSchema = z.object({
 	applicationForm: z
 		.array(
@@ -146,16 +165,13 @@ export const jobPostingSchema = z.object({
 	companyInfo: z
 		.object({
 			name: z.string().describe("The name of the company."),
-			// Removed .nullable() from here and other optional fields.
-			// If the info isn't there, the LLM should omit the key.
+			shortName: z.string().describe("The short one word name of the company"),
 			location: z
 				.string()
 				.describe(
 					"The primary physical location of the company (e.g., 'San" +
 						" Francisco, CA').",
 				),
-			// z.string().url() does not accept null as a valid string to then be validated as a URL.
-			// Keeping it optional means if no URL is found, the key is omitted.
 			website: z.string().describe("The official website URL of the company."),
 			industry: z
 				.string()
@@ -530,6 +546,9 @@ export const resumeCritiqueSchema = z.object({
 	finalVerdictAndActionPlan: z
 		.object({
 			summary: z.string().describe("A concluding summary of the findings."),
+			isReadyForSubmission: z
+				.boolean()
+				.describe("Is the resume ready to be submitted?"),
 			actionItems: z
 				.array(z.string())
 				.min(3)

@@ -167,3 +167,12 @@ You are an expert HTML cleaner
 	>;
 	return turndownService.turndown(parsed.cleanHtml || "");
 }
+
+export function isoFileSuffixUTC(date = new Date()) {
+	// "2025-07-15T16:05:15.123Z"
+	return date
+		.toISOString()
+		.slice(0, 19) // "2025-07-15T16:05:15"
+		.replace(/:/g, "-") // "2025-07-15T16-05-15"
+		.replace("T", "_"); // "2025-07-15_16-05-15"
+}

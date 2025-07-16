@@ -15,13 +15,13 @@ export async function formCompleterAsync({
 	sessionId,
 	applicationDetails,
 	resume,
-	personalInfo,
+	personalMetadata,
 	context,
 }: {
 	sessionId: string;
 	applicationDetails: z.infer<typeof jobPostingSchema>;
 	resume: string;
-	personalInfo: string;
+	personalMetadata: string;
 	context: string[];
 }) {
 	const llm = new LLM("form-completer", {
@@ -104,7 +104,7 @@ ${resume}
 </applicant-resume>
 
 <personal-info>
-${personalInfo}
+${personalMetadata}
 </personal-info>
 
 <company-context>
