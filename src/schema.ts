@@ -294,6 +294,14 @@ export const jobPostingSchema = z.object({
 
 	url: z.string().describe("The final url for the job application"),
 
+	antiBotMeasures: z
+		.array(z.string())
+		.describe(
+			"List of anti-bot or CAPTCHA measures detected in the HTML " +
+				"(e.g., 'reCAPTCHA v2', 'honeypot hidden field'). " +
+				"Returns an empty array if none detected.",
+		),
+
 	successfulScrape: z
 		.boolean()
 		.describe(
