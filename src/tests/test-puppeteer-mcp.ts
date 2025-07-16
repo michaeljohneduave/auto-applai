@@ -19,7 +19,7 @@ await llm.addMCPClient({
 	transport: "sse",
 });
 
-const messages: ChatCompletionMessageParam[] = [
+llm.setMessages([
 	{
 		role: "system",
 		content: `
@@ -29,12 +29,12 @@ You are a puppeteer automation expert.
 Your goal is to follow the users commands and complete the tasks.
 `,
 	},
-];
+]);
 
 while (true) {
 	// const userInput = await readline.question("Enter a command: ");
 
-	messages.push({
+	llm.addMessage({
 		role: "user",
 		content: `
 Do the following:
@@ -45,7 +45,6 @@ Do the following:
 	});
 
 	const { completion: response } = await llm.generateOutput({
-		messages,
 		temperature: 0.2,
 		top_p: 0.9,
 	});
@@ -56,7 +55,7 @@ Do the following:
 		break;
 	}
 
-	messages.push({
+	llm.addMessage({
 		role: "assistant",
 		content: response.choices[0].message.content,
 	});
