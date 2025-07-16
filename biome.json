@@ -1,24 +1,20 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "files": {
-    "ignore": [
-      "node_modules",
-      "dist",
-      "build"
-    ]
-  },
-  "linter": {
-    "rules": {
-      "suspicious": {
-        "useAwait": "error"
-      },
-      "style": {
-        "noNonNullAssertion": "off"
-      }
-    }
-  },
-  "formatter": {
-    "bracketSpacing": true,
-    "lineWidth": 80
-  }
+	"$schema": "https://biomejs.dev/schemas/2.1.1/schema.json",
+	"files": {
+		"includes": ["**", "!**/node_modules", "!**/dist", "!**/build"]
+	},
+	"linter": {
+		"rules": {
+			"suspicious": {
+				"useAwait": "error"
+			},
+			"style": {
+				"noNonNullAssertion": "off"
+			}
+		}
+	},
+	"formatter": {
+		"bracketSpacing": true,
+		"lineWidth": 80
+	}
 }
