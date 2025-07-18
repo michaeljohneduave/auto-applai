@@ -7,15 +7,14 @@ import type { z } from "zod";
 import { llmFormCrawler } from "./crawler.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
-import { formCompleterAsync } from "./formCompletionAsync.ts";
 import { generateResumeIterative } from "./generateResume.ts";
 import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
+import { updateSession } from "./models/session.ts";
 import {
 	type formCompleterSchema,
 	latexResumeSchema,
 	personalInfoSchema,
 } from "./schema.ts";
-import { sessionManager } from "./sessionManager.ts";
 import { handleCaptcha, htmlCrawler, isoFileSuffixUTC } from "./utils.ts";
 
 const urlRegex =
@@ -198,17 +197,17 @@ ${personalMetadata}
 	}
 }
 
-export async function orchestrator(
+export async function run(
+	userId: string,
 	sessionId: string,
 	jobUrl: string,
 	readline?: Interface,
 ) {
 	try {
-		sessionManager.updateProgress(
-			sessionId,
-			"loading_context",
-			"Loading application context...",
-		);
+		await updateSession(userId, sessionId, {
+			currentStep: "loading_context",
+			status: "processing",
+		});
 
 		const mdContent: {
 			markdown: string;
@@ -221,14 +220,14 @@ export async function orchestrator(
 			latexReferenceResume,
 			personalInfo,
 			personalMetadata,
-		} = await loadApplicationContext(sessionId);
+		} = await loadApplicationContext(sessionId, db);
 
-		sessionManager.updateProgress(
-			sessionId,
-			"scraping",
-			"Scraping job posting...",
-		);
-		const { html, validLinks, screenshot } = await htmlCrawler(jobUrl);
+		await updateSession(userId, sessionId, {
+			currentStep: "scraping",
+			status: "processing",
+		});
+
+		const { html, screenshot } = await htmlCrawler(jobUrl);
 		let applicationDetails = await extractInfo(html, screenshot, sessionId);
 
 		let formUrl = jobUrl;
@@ -257,17 +256,15 @@ export async function orchestrator(
 			applicationDetails = await extractInfo(html22, screenshot, sessionId);
 		}
 
-		sessionManager.updateSession(sessionId, {
+		await updateSession(userId, sessionId, {
 			applicationDetails,
 			screenshot: Buffer.from(screenshot, "base64"),
 		});
 
 		if (!applicationDetails.applicationForm.length) {
-			sessionManager.updateProgress(
-				sessionId,
-				"agentic_scraping",
-				"Using agentic scraper to find application form...",
-			);
+			await updateSession(userId, sessionId, {
+				currentStep: "agentic_scraping",
+			});
 
 			const crawledUrl = await llmFormCrawler(jobUrl, sessionId);
 			formUrl = crawledUrl.match(urlRegex)?.[0] || jobUrl;
@@ -282,11 +279,9 @@ export async function orchestrator(
 			applicationDetails.applicationForm = details.applicationForm;
 		}
 
-		sessionManager.updateProgress(
-			sessionId,
-			"generating_resume",
-			"Generating tailored resume...",
-		);
+		await updateSession(userId, sessionId, {
+			currentStep: "generating_resume",
+		});
 		const { adjustedResume, generatedEvals, generatedResumes } =
 			await generateResumeIterative(ogResumeMd, applicationDetails, sessionId);
 
@@ -294,22 +289,18 @@ export async function orchestrator(
 			throw new Error("Updated resume not generated");
 		}
 
-		sessionManager.updateProgress(
-			sessionId,
-			"generating_latex",
-			"Converting resume to LaTeX...",
-		);
+		await updateSession(userId, sessionId, {
+			currentStep: "generating_latex",
+		});
 		const latexResume = await latexResumeGenerator(
 			latexReferenceResume,
 			adjustedResume,
 			sessionId,
 		);
 
-		sessionManager.updateProgress(
-			sessionId,
-			"generating_pdf",
-			"Generating PDF resume...",
-		);
+		await updateSession(userId, sessionId, {
+			currentStep: "generating_pdf",
+		});
 		const latexPdf = await generatePdf(latexResume);
 
 		const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
@@ -321,11 +312,11 @@ export async function orchestrator(
 		)}`;
 
 		// Save assets
-		sessionManager.updateProgress(
-			sessionId,
-			"saving_assets",
-			"Saving generated assets...",
-		);
+		await updateSession(userId, sessionId, {
+			currentStep: "saving assets",
+			status: "processing",
+		});
+
 		await fs.mkdir(assetPath, { recursive: true });
 		await fs.writeFile(
 			`${assetPath}/${toKebabCase(personalInfo.fullName)}-${applicationDetails.companyInfo.name.toLowerCase()}-resume.pdf`,
@@ -364,8 +355,8 @@ export async function orchestrator(
 		);
 
 		// Update session with all generated data
-		sessionManager.updateSession(sessionId, {
-			companyName,
+		await updateSession(userId, sessionId, {
+			company_name: companyName,
 			adjustedResume,
 			latexResume,
 			latexPdf: Buffer.from(latexPdf),
@@ -387,74 +378,44 @@ export async function orchestrator(
 					personalMetadata,
 					context: mdContent.map((md) => md.markdown),
 				});
-			} else {
-				completedForm = await formCompleterAsync({
-					sessionId,
-					applicationDetails,
-					resume: ogResumeMd,
-					personalMetadata,
-					context: mdContent.map((md) => md.markdown),
-				});
+
+				// Save completed form
+				await fs.writeFile(
+					`${assetPath}/completedForm.json`,
+					JSON.stringify(completedForm),
+				);
+				await fs.writeFile(
+					`${assetPath}/${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-cover-letter.txt`,
+					completedForm.coverLetter,
+					{ encoding: "utf-8" },
+				);
+
+				await updateSession(userId, sessionId, { completedForm });
 			}
 
-			// Save completed form
-			await fs.writeFile(
-				`${assetPath}/completedForm.json`,
-				JSON.stringify(completedForm),
-			);
-			await fs.writeFile(
-				`${assetPath}/${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-cover-letter.txt`,
-				completedForm.coverLetter,
-				{ encoding: "utf-8" },
-			);
+			const result = {
+				sessionId,
+				companyName,
+				applicationDetails,
+				adjustedResume,
+				latexResume,
+				latexPdf: Buffer.from(latexPdf),
+				screenshot: Buffer.from(screenshot, "base64"),
+				formUrl,
+				assetPath,
+				completedForm,
+			};
 
-			sessionManager.updateSession(sessionId, { completedForm });
+			await updateSession(userId, sessionId, { status: "completed" });
+			return result;
 		}
-
-		const result = {
-			sessionId,
-			companyName,
-			applicationDetails,
-			adjustedResume,
-			latexResume,
-			latexPdf: Buffer.from(latexPdf),
-			screenshot: Buffer.from(screenshot, "base64"),
-			formUrl,
-			assetPath,
-			completedForm,
-		};
-
-		sessionManager.completeSession(sessionId, result);
-		return result;
 	} catch (error) {
 		const errorMessage =
 			error instanceof Error ? error.message : "Unknown error";
-		sessionManager.failSession(sessionId, errorMessage);
+		await updateSession(userId, sessionId, {
+			status: "failed",
+			error: errorMessage,
+		});
 		throw error;
 	}
-}
-
-export async function checkRequiredServices() {
-	console.log("Checking required services...");
-
-	// Check Pandoc Server
-	try {
-		const pandocResponse = await fetch(`${process.env.PDF_SERVICE_URL}/health`);
-		if (!pandocResponse.ok) throw new Error("Pandoc server is not responding");
-	} catch (error) {
-		throw new Error("Pandoc server must be running on port 4000");
-	}
-
-	// Check Puppeteer MCP Server
-	try {
-		const mcpResponse = await fetch(
-			`${process.env.PUPPETEER_SERVICE_URL}/health`,
-		);
-		if (!mcpResponse.ok)
-			throw new Error("Puppeteer MCP server is not responding");
-	} catch (error) {
-		throw new Error("Puppeteer MCP server must be running on port 3000");
-	}
-
-	console.log("✓ All required services are running");
 }

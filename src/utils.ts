@@ -5,6 +5,7 @@ import Turndown from "turndown";
 import { z } from "zod";
 import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import { cleanedHtmlSchema } from "./schema.ts";
+
 const turndownService = new Turndown();
 
 function isSocialMediaOrEmail(url: string): boolean {
@@ -90,7 +91,7 @@ export async function htmlCrawler(pageUrl: string) {
 
 export async function htmlToMarkdown(
 	html: string,
-	url: string,
+	_url: string,
 	options?: {
 		removeLinks?: boolean;
 		removeDataAttr?: boolean;
@@ -112,7 +113,7 @@ export async function htmlToMarkdown(
 
 			if (attributes) {
 				for (const attrName in attributes) {
-					if (Object.prototype.hasOwnProperty.call(attributes, attrName)) {
+					if (Object.hasOwn(attributes, attrName)) {
 						// Check if it's a data-* attribute
 						if (attrName.startsWith("data-")) {
 							const attrValue = attributes[attrName];
