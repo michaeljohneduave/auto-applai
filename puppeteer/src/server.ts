@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import fsPromises, { mkdir } from "node:fs/promises";
-import os, { tmpdir } from "node:os";
+import { mkdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { setTimeout } from "node:timers/promises";
 import multipart from "@fastify/multipart";
 import Fastify from "fastify";
 import {
-	type ZodTypeProvider,
 	serializerCompiler,
 	validatorCompiler,
+	type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import puppeteer from "puppeteer";
 import { z } from "zod";
