@@ -4,7 +4,7 @@ import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import { evaluator } from "./evaluator.ts";
-import LLM, { GEMINI_25_FLASH, GEMINI_25_PRO } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH } from "./llm.ts";
 import {
 	type evaluatorSchema,
 	formCompleterSchema,

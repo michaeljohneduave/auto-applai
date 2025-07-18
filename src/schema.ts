@@ -400,16 +400,6 @@ export const latexResumeSchema = z.object({
 
 export const adjustedResumeSchema = z.object({
 	resume: z.string().describe("The adjusted resume in markdown"),
-	recommendations: z
-		.array(
-			z.object({
-				action: z.string().describe("The recommendation done in the resume"),
-				explaination: z
-					.string()
-					.describe("The explanation, why recommendation was added."),
-			}),
-		)
-		.describe("The recommendations made and added into the resume."),
 });
 
 // A detailed analysis of a single job experience entry from the resume.
@@ -568,4 +558,9 @@ export const resumeCritiqueSchema = z.object({
 		.describe(
 			"The final summary and a prioritized list of actionable steps for the candidate.",
 		),
+});
+
+export const AssetResponseSchema = z.object({
+	baseResume: z.string(),
+	personalInfo: z.string(),
 });

@@ -7,3 +7,4 @@ linux-chrome-profile*
 .DS_Store
 
 llm-logs.db
+task-lists/*

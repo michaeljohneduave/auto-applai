@@ -6,7 +6,6 @@ import { jobPostingSchema } from "./schema.ts";
 
 export async function extractInfo(
 	html: string,
-	base64Screenshot: string,
 	sessionId: string,
 ): Promise<z.infer<typeof jobPostingSchema>> {
 	console.log("Extracting Job information");

@@ -1,8 +1,7 @@
 import { toXML } from "jstoxml";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
-import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
-import LLM, { GEMINI_25_FLASH, GEMINI_25_PRO } from "./llm.ts";
+import LLM, { GEMINI_25_PRO } from "./llm.ts";
 import {
 	adjustedResumeSchema,
 	type jobPostingSchema,
