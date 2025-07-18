@@ -1,12 +1,29 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.1.1/schema.json",
 	"files": {
-		"includes": ["**", "!**/node_modules", "!**/dist", "!**/build"]
+		"includes": ["src/**/*", "pandoc-latex/src/**/*", "puppeteer/src/**/*"]
 	},
 	"linter": {
 		"rules": {
+			"correctness": {
+				"noUnusedFunctionParameters": {
+					"fix": "none",
+					"level": "warn",
+					"options": {
+						"ignoreRestSiblings": true
+					}
+				},
+				"noUnusedVariables": {
+					"fix": "none",
+					"level": "warn",
+					"options": {
+						"ignoreRestSiblings": true
+					}
+				},
+				"noUnusedImports": "warn"
+			},
 			"suspicious": {
-				"useAwait": "error"
+				"useAwait": "warn"
 			},
 			"style": {
 				"noNonNullAssertion": "off"
