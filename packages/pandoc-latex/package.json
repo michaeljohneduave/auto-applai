@@ -1,5 +1,5 @@
 {
-  "name": "pandoc-latex",
+  "name": "@autoa-apply/pandoc-latex",
   "version": "1.0.0",
   "main": "server.ts",
   "scripts": {
