@@ -61,11 +61,13 @@ In this pass, you will take the revised text from Pass 1 and apply bold formatti
     -   **For Professional Summary & Experience Sections:**
         -   Apply the bolding shown in the evaluation's examples and suggestions.
         -   If the evaluation noted a keyword should be bolded (e.g., "ensure 'CI/CD' is bolded"), you must bold it.
-        -   Limit bolding to 5-7 keywords per job entry.
+        - 	Professional Summary section: Limit bolding to 2-3 keywords.
+				-   Experience section: Limit bolding to 2-3 keywords per job entry.
         -   Prioritize bolding of quantifiable results and key technologies as highlighted in the evaluation.
     -   **For Skills Sections:**
         -   Follow the evaluation's guidance on skill bolding. The primary rule is to **only** highlight skills that were on the **original '<resume>'** AND are required in the **'<job-posting>'**.
         -   Focus highlighting on technical skills, tools, and specific methodologies. Avoid highlighting generic soft skills.
+				- 	Limit bolding to 2-3 keywords per sub-section.
 
 **At the end of this pass, you will have the fully revised and strategically highlighted resume content.**
 
@@ -108,7 +110,7 @@ Your entire output must be a single, valid JSON object that strictly conforms to
 4.  **Action-Oriented Plan:** In the 'finalVerdictAndActionPlan.actionItems' array, frame each string as a direct, verbose command for a subsequent AI to execute. For example: "Reorder the bullet points in the 'Data Engineer, Specter' role to move the bullet point starting with 'Spearheaded development of a React.js/TypeScript platform...' to the top of that section."
 `;
 
-export async function generateResumeIterative(
+export async function generateResume(
 	resumeMd: string,
 	applicationDetails: z.infer<typeof jobPostingSchema>,
 	sessionId: string,

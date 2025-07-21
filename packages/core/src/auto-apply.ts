@@ -1,15 +1,15 @@
 import fs from "node:fs/promises";
 import type { Interface } from "node:readline/promises";
+import { updateSession } from "@auto-apply/api/src/models/session";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import { toKebabCase } from "remeda";
 import type { z } from "zod";
 import { llmFormCrawler } from "../src/crawler.ts";
+import { generateResume } from "../src/generateResume.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
-import { generateResumeIterative } from "../src/generateResume.ts";
 import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
-import { updateSession } from "@auto-apply/api/src/models/session";
 import {
 	type formCompleterSchema,
 	latexResumeSchema,
@@ -283,7 +283,7 @@ export async function run(
 			currentStep: "generating_resume",
 		});
 		const { adjustedResume, generatedEvals, generatedResumes } =
-			await generateResumeIterative(ogResumeMd, applicationDetails, sessionId);
+			await generateResume(ogResumeMd, applicationDetails, sessionId);
 
 		if (!adjustedResume) {
 			throw new Error("Updated resume not generated");
