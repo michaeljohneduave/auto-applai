@@ -4,12 +4,12 @@ import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import { toKebabCase } from "remeda";
 import type { z } from "zod";
-import { llmFormCrawler } from "./crawler.ts";
+import { llmFormCrawler } from "../src/crawler.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
-import { generateResumeIterative } from "./generateResume.ts";
+import { generateResumeIterative } from "../src/generateResume.ts";
 import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
-import { updateSession } from "./models/session.ts";
+import { updateSession } from "@auto-apply/api/src/models/session";
 import {
 	type formCompleterSchema,
 	latexResumeSchema,
@@ -220,7 +220,7 @@ export async function run(
 			latexReferenceResume,
 			personalInfo,
 			personalMetadata,
-		} = await loadApplicationContext(sessionId, db);
+		} = await loadApplicationContext(sessionId);
 
 		await updateSession(userId, sessionId, {
 			currentStep: "scraping",
@@ -228,7 +228,7 @@ export async function run(
 		});
 
 		const { html, screenshot } = await htmlCrawler(jobUrl);
-		let applicationDetails = await extractInfo(html, screenshot, sessionId);
+		let applicationDetails = await extractInfo(html, sessionId);
 
 		let formUrl = jobUrl;
 
@@ -253,7 +253,7 @@ export async function run(
 			console.log("-----html22--------");
 			console.log(html22);
 			console.log("-----html22--------");
-			applicationDetails = await extractInfo(html22, screenshot, sessionId);
+			applicationDetails = await extractInfo(html22, sessionId);
 		}
 
 		await updateSession(userId, sessionId, {
@@ -270,7 +270,7 @@ export async function run(
 			formUrl = crawledUrl.match(urlRegex)?.[0] || jobUrl;
 
 			const { html, screenshot } = await htmlCrawler(formUrl);
-			const details = await extractInfo(html, screenshot, sessionId);
+			const details = await extractInfo(html, sessionId);
 
 			if (!details.applicationForm.length) {
 				console.log("No application form found");

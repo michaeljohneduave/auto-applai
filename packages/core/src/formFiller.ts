@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import { z } from "zod";
 import LLM, { GEMINI_25_FLASH_LITE } from "./llm.ts";
-import type { formCompleterSchema } from "./schema.ts";
+import type { formCompleterSchema } from "../../src/schema.ts";
 
 const systemPrompt = `
 # Identity

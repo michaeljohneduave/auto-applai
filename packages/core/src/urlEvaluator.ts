@@ -1,8 +1,8 @@
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { z } from "zod";
 import LLM, { SMALL_MODEL } from "./llm.ts";
-import { urlEvalSchema } from "./schema.ts";
 import type { jobPostingSchema } from "./schema.ts";
+import { urlEvalSchema } from "./schema.ts";
 
 export async function* urlEvaluator(
 	urls: string[],

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { run } from "./auto-apply";
-import { queue } from "./utils/queue";
+import { run } from "../../core/src/auto-apply";
+import { queue } from "../../core/src/utils/queue";
 
 async function processJob() {
 	const job = queue.dequeue();

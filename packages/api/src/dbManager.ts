@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import LRUCache from "./utils/LRU";
+import LRUCache from "../../core/src/utils/LRU";
 
 const DB_CACHE_SIZE = 200;
 const DB_ROOT = "dbs";

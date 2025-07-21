@@ -8,13 +8,13 @@ import type {
 	Prompt,
 } from "@modelcontextprotocol/sdk/types.js";
 import OpenAI from "openai";
+import type { ParsedChatCompletion } from "openai/resources/beta/chat/completions.mjs";
 import type {
 	ChatCompletion,
 	ChatCompletionCreateParamsNonStreaming,
 	ChatCompletionMessageParam,
 	ChatCompletionTool,
 } from "openai/resources.mjs";
-import type { ParsedChatCompletion } from "openai/resources/beta/chat/completions.mjs";
 import { randomString } from "remeda";
 import { z } from "zod";
 
@@ -210,13 +210,7 @@ export default class LLM {
 		this.#messages.push(message);
 	}
 
-	async callTool({
-		name,
-		args = "{}",
-	}: {
-		name: string;
-		args?: string;
-	}) {
+	async callTool({ name, args = "{}" }: { name: string; args?: string }) {
 		for (const mcp of this.#mcps) {
 			const tool = mcp.tools.find((t) => t.name === name);
 			if (!tool) {
@@ -297,11 +291,7 @@ export default class LLM {
 			) as ChatCompletionTool[];
 	}
 
-	async eval({
-		evalMessages,
-	}: {
-		evalMessages: ChatCompletionMessageParam[];
-	}) {
+	async eval({ evalMessages }: { evalMessages: ChatCompletionMessageParam[] }) {
 		const response = await this.#openai.chat.completions.create({
 			model: this.#model,
 			messages: [
@@ -538,18 +528,18 @@ ${JSON.stringify(this.getTools())}
 		response: ParsedChatCompletion<T> | ChatCompletion,
 	) {
 		try {
-			await fetch("http://localhost:4001/log", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					sessionId: this.#sessionId,
-					llmName: this.#name,
-					request,
-					response,
-				}),
-			});
+			// await fetch("http://localhost:5000/log", {
+			// 	method: "POST",
+			// 	headers: {
+			// 		"Content-Type": "application/json",
+			// 	},
+			// 	body: JSON.stringify({
+			// 		sessionId: this.#sessionId,
+			// 		llmName: this.#name,
+			// 		request,
+			// 		response,
+			// 	}),
+			// });
 		} catch (error) {
 			console.error("Failed to log LLM call:", error);
 		}

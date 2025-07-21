@@ -6,7 +6,7 @@ import {
 	adjustedResumeSchema,
 	type jobPostingSchema,
 	resumeCritiqueSchema,
-} from "./schema.ts";
+} from "./schema";
 
 const generateResumeSystemPrompt = `
 # IDENTITY

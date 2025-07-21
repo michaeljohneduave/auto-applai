@@ -4,7 +4,7 @@ import type {
 	jobPostingSchema,
 	personalInfoSchema,
 	resumeCritiqueSchema,
-} from "./schema";
+} from "../../core/src/schema";
 
 export interface UserData {
 	id: number;

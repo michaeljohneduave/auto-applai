@@ -1,7 +1,8 @@
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
+import { checkRequiredServices } from "@auto-apply/api/src/services.ts";
 import { randomString } from "remeda";
-import { checkRequiredServices, orchestrator } from "./auto-apply.ts";
+import { run } from "./auto-apply.ts";
 
 try {
 	const sessionId = randomString(10);
@@ -14,7 +15,7 @@ try {
 
 	while (true) {
 		const url = await readline.question("URL: ");
-		await orchestrator(sessionId, url, readline);
+		await run("cli-user", sessionId, url, readline);
 	}
 } catch (e) {
 	console.error(e);

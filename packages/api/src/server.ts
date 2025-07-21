@@ -10,9 +10,9 @@ import auth from "./plugins/auth.ts";
 import { checkRequiredServices } from "./services.ts";
 
 import "./worker.ts";
+import { AssetResponseSchema } from "@auto-apply/core/src/schema";
 import { z } from "zod";
-import { AssetResponseSchema } from "./schema.ts";
-import { queue } from "./utils/queue.ts";
+import { queue } from "../../core/src/utils/queue.ts";
 
 declare module "fastify" {
 	export interface FastifyInstance {

@@ -1,8 +1,8 @@
 import type { z } from "zod";
-import { contentEvaluator } from "./contentEvaluator";
+import { contentEvaluator } from "../src/contentEvaluator.ts";
 import type { jobPostingSchema } from "./schema.ts";
-import { urlEvaluator } from "./urlEvaluator.ts";
-import { htmlFormCrawler, htmlToMarkdown } from "./utils.ts";
+import { urlEvaluator } from "../../src/urlEvaluator.ts";
+import { htmlFormCrawler, htmlToMarkdown } from "../../src/utils.ts";
 
 async function asyncGenCollector<T>(genFunction: AsyncGenerator<T>) {
 	const collector: T[] = [];
