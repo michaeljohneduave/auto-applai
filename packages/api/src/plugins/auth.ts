@@ -11,19 +11,17 @@ declare module "fastify" {
 		authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void>;
 	}
 	interface FastifyRequest {
-		session: SessionAuthObject | null;
+		authSession: SessionAuthObject;
 	}
 }
 
 const authPlugin: FastifyPluginCallback = (fastify, _, done) => {
-	fastify.decorateRequest("session", null);
-
 	fastify.decorate(
 		"authenticate",
 		async (req: FastifyRequest, reply: FastifyReply) => {
 			const user = await getAuth(req);
 			if (user.userId) {
-				req.session = user;
+				req.authSession = user;
 			} else {
 				reply.code(401).send({ error: "Invalid or expired token" });
 			}

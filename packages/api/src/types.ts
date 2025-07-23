@@ -84,3 +84,17 @@ export type ModelProvider = {
 };
 
 export type ModelsDev = Record<string, ModelProvider>;
+
+export type SessionCost = {
+	totalCost: number;
+	inputTokens: number;
+	outputTokens: number;
+	perModel: Record<
+		string,
+		{
+			inputTokens: number;
+			outputTokens: number;
+			cost: number;
+		}
+	>;
+};

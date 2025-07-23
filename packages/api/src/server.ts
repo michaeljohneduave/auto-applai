@@ -11,8 +11,11 @@ import { checkRequiredServices } from "./services.ts";
 
 import "./worker.ts";
 import { AssetResponseSchema } from "@auto-apply/core/src/schema";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { queue } from "../../core/src/utils/queue.ts";
+import { db } from "./db.ts";
+import { sessions, users } from "./schema/schema.ts";
 
 declare module "fastify" {
 	export interface FastifyInstance {
@@ -63,17 +66,29 @@ app.withTypeProvider<ZodTypeProvider>().route({
 		},
 	},
 	preHandler: authHandler,
-	handler: (req, reply) => {
-		return {
-			baseResume: "",
-			personalInfo: "",
-		};
+	handler: async (req) => {
+		const [assets] = await db
+			.select({
+				baseResumeMd: users.baseResumeMd,
+				personalInfoMd: users.personalInfoMd,
+			})
+			.from(users)
+			.where(eq(users.userId, req.authSession.userId!));
+
+		if (!assets) {
+			return {
+				baseResumeMd: "",
+				personalInfoMd: "",
+			};
+		}
+
+		return assets;
 	},
 });
 
 app.withTypeProvider<ZodTypeProvider>().route({
 	method: "POST",
-	url: "/job",
+	url: "/session",
 	schema: {
 		body: z.object({
 			jobUrl: z.string().url(),
@@ -83,10 +98,28 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	handler: (req, reply) => {
 		queue.enqueue({
 			jobUrl: req.body.jobUrl,
-			userId: req.session?.userId!,
+			userId: req.authSession?.userId!,
 		});
 
 		reply.code(200).send("Enqueued");
+	},
+});
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/sessions",
+	schema: {
+		querystring: z.object({
+			limit: z.number().optional(),
+			skip: z.number().optional(),
+		}),
+	},
+	preHandler: authHandler,
+	handler: async (req) => {
+		return await db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.userId, req.authSession.userId!));
 	},
 });
 

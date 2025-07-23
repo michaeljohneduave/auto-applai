@@ -561,6 +561,6 @@ export const resumeCritiqueSchema = z.object({
 });
 
 export const AssetResponseSchema = z.object({
-	baseResume: z.string(),
-	personalInfo: z.string(),
+	baseResumeMd: z.string(),
+	personalInfoMd: z.string(),
 });

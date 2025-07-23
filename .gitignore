@@ -6,5 +6,5 @@ node_modules
 linux-chrome-profile*
 .DS_Store
 
-llm-logs.db
+*.db
 task-lists/*
