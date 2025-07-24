@@ -20,6 +20,7 @@
 		"better-sqlite3": "^12.2.0",
 		"cheerio": "^1.1.0",
 		"docx": "^9.5.1",
+		"drizzle-orm": "^0.44.3",
 		"express": "^5.1.0",
 		"fastify": "^5.3.3",
 		"fastify-plugin": "^5.0.1",
