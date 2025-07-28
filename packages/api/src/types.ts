@@ -1,10 +1,10 @@
-import type { z } from "zod";
 import type {
 	formCompleterSchema,
 	jobPostingSchema,
 	personalInfoSchema,
 	resumeCritiqueSchema,
-} from "../../core/src/schema";
+} from "@auto-apply/core/src/schema";
+import type { z } from "zod";
 
 export interface UserData {
 	id: number;

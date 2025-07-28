@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { clerkPlugin } from "@clerk/fastify";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import fastifySseV2 from "fastify-sse-v2";
 import {
 	serializerCompiler,
 	validatorCompiler,
@@ -8,14 +9,23 @@ import {
 } from "fastify-type-provider-zod";
 import auth from "./plugins/auth.ts";
 import { checkRequiredServices } from "./services.ts";
+import { generatePdf } from "./utils.ts";
 
 import "./worker.ts";
-import { AssetResponseSchema } from "@auto-apply/core/src/schema";
-import { eq } from "drizzle-orm";
+import path from "node:path";
+import {
+	type Logs,
+	type Sessions,
+	sessions,
+	type Users,
+	users,
+} from "@auto-apply/core/src/db/schema";
+import { queue } from "@auto-apply/core/src/utils/queue.ts";
+import { and, eq } from "drizzle-orm";
+import { toKebabCase } from "remeda";
 import { z } from "zod";
-import { queue } from "../../core/src/utils/queue.ts";
 import { db } from "./db.ts";
-import { sessions, users } from "./schema/schema.ts";
+import { eventBus } from "./events.ts";
 
 declare module "fastify" {
 	export interface FastifyInstance {
@@ -28,6 +38,7 @@ declare module "fastify" {
 
 const app = Fastify({
 	logger: {
+		level: "info",
 		transport: {
 			target: "pino-pretty",
 			options: {
@@ -45,6 +56,7 @@ await fs.mkdir("assets/failed-scrapes", {
 
 app.register(clerkPlugin);
 app.register(auth);
+app.register(fastifySseV2);
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
@@ -53,30 +65,67 @@ app.get("/health", (_, res) => {
 	res.status(200).send();
 });
 
-const authHandler = async (req, reply) => {
+const clients = new Map<string, FastifyReply>();
+
+eventBus.on("session:update", (data) => {
+	for (const [userId, client] of clients.entries()) {
+		if (userId === data.userId) {
+			client.sse({
+				event: "session:update",
+				data: JSON.stringify(data),
+			});
+		}
+	}
+});
+
+// Auth handler will attach session into req object if there's valid auth token
+const authHandler = async (req: FastifyRequest, reply: FastifyReply) => {
 	await app.authenticate(req, reply);
 };
 
-app.withTypeProvider<ZodTypeProvider>().route({
+app.route({
+	method: "GET",
+	url: "/events",
+	preHandler: authHandler,
+	handler: (req, reply) => {
+		clients.set(req.authSession.userId!, reply);
+		req.raw.on("close", () => {
+			clients.delete(req.authSession.userId!);
+		});
+	},
+});
+
+export type GetAssetsResponse = Pick<
+	Users,
+	"baseResumeLatex" | "baseResumeMd" | "personalInfoMd"
+>;
+
+app.withTypeProvider<ZodTypeProvider>().route<{
+	Reply: GetAssetsResponse;
+}>({
 	method: "GET",
 	url: "/assets",
-	schema: {
-		response: {
-			200: AssetResponseSchema,
-		},
-	},
 	preHandler: authHandler,
 	handler: async (req) => {
 		const [assets] = await db
 			.select({
 				baseResumeMd: users.baseResumeMd,
 				personalInfoMd: users.personalInfoMd,
+				baseResumeLatex: users.baseResumeLatex,
 			})
 			.from(users)
 			.where(eq(users.userId, req.authSession.userId!));
 
 		if (!assets) {
+			await db.insert(users).values({
+				baseResumeLatex: "",
+				baseResumeMd: "",
+				personalInfoMd: "",
+				userId: req.authSession.userId!,
+			});
+
 			return {
+				baseResumeLatex: "",
 				baseResumeMd: "",
 				personalInfoMd: "",
 			};
@@ -86,14 +135,75 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
+const putAssetsSchema = {
+	body: z.object({
+		baseResumeMd: z.string().optional(),
+		baseResumeLatex: z.string().optional(),
+		personalInfoMd: z.string().optional(),
+	}),
+};
+export type PutAssetsBody = z.infer<typeof putAssetsSchema.body>;
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "PUT",
+	url: "/assets",
+	schema: putAssetsSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const [response] = await db
+			.update(users)
+			.set(req.body)
+			.where(eq(users.userId, req.authSession.userId!))
+			.returning({
+				resumeMd: users.baseResumeMd,
+				resumeLatex: users.baseResumeLatex,
+				personalInfo: users.personalInfoMd,
+			});
+
+		// if (req.body.baseResumeLatex) {
+		// 	const blob = await generatePdf(response.resumeLatex);
+		// 	reply.header("content-type", "application/octet-stream");
+		// 	return reply.send(Buffer.from(blob));
+		// }
+
+		reply.send(200);
+	},
+});
+
+const postAssetsPdfSchema = {
+	body: z.object({
+		latex: z.string(),
+	}),
+};
+export type PostAssetsPdfBody = z.infer<typeof postAssetsPdfSchema.body>;
+
 app.withTypeProvider<ZodTypeProvider>().route({
 	method: "POST",
-	url: "/session",
-	schema: {
-		body: z.object({
-			jobUrl: z.string().url(),
-		}),
+	url: "/assets/pdf",
+	schema: postAssetsPdfSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const blob = await generatePdf(req.body.latex);
+		reply.header("content-type", "application/octet-stream");
+		reply.send(Buffer.from(blob));
 	},
+});
+
+// Poor man's trpc
+const postSessionsSchema = {
+	body: z.object({
+		jobUrl: z.string().url(),
+	}),
+};
+export type PostSessionsResponse = null;
+export type PostSessionsBody = z.infer<typeof postSessionsSchema.body>;
+app.withTypeProvider<ZodTypeProvider>().route<{
+	Reply: PostSessionsResponse;
+	Body: PostSessionsBody;
+}>({
+	method: "POST",
+	url: "/sessions",
+	schema: postSessionsSchema,
 	preHandler: authHandler,
 	handler: (req, reply) => {
 		queue.enqueue({
@@ -105,21 +215,89 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
-app.withTypeProvider<ZodTypeProvider>().route({
+const getSessionsSchema = {
+	querystring: z.object({
+		limit: z.number().optional(),
+		skip: z.number().optional(),
+	}),
+};
+export type GetSessionsResponse = Array<
+	Sessions & {
+		logs: Logs[];
+	}
+>;
+export type GetSesssionsQueryString = z.infer<
+	typeof getSessionsSchema.querystring
+>;
+app.withTypeProvider<ZodTypeProvider>().route<{
+	Querystring: GetSesssionsQueryString;
+	Reply: GetSessionsResponse;
+}>({
 	method: "GET",
 	url: "/sessions",
-	schema: {
-		querystring: z.object({
-			limit: z.number().optional(),
-			skip: z.number().optional(),
-		}),
-	},
+	schema: getSessionsSchema,
 	preHandler: authHandler,
 	handler: async (req) => {
-		return await db
-			.select()
+		const response = await db.query.sessions.findMany({
+			where: (sessions) => eq(sessions.userId, req.authSession.userId!),
+			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
+			with: {
+				logs: true,
+			},
+		});
+
+		return response;
+	},
+});
+
+const getGeneratedResumeSchema = {
+	querystring: z.object({
+		sessionId: z.string(),
+	}),
+};
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/generated-resume",
+	schema: getGeneratedResumeSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const [session] = await db
+			.select({
+				applicationForm: sessions.applicationForm,
+				personalInfo: sessions.personalInfo,
+				applicationDetails: sessions.applicationDetails,
+				assetPath: sessions.assetPath,
+				status: sessions.status,
+			})
 			.from(sessions)
-			.where(eq(sessions.userId, req.authSession.userId!));
+			.where(
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.query.sessionId),
+				),
+			);
+
+		if (!session || session.status !== "done" || !session.assetPath) {
+			reply.send();
+
+			return;
+		}
+
+		const fileName = [
+			session.assetPath,
+			toKebabCase(
+				[
+					session.personalInfo?.fullName || "",
+					session.applicationDetails?.companyInfo.name.toLowerCase() || "",
+					"resume.pdf",
+				].join(" "),
+			),
+		];
+
+		const blob = await fs.readFile(path.join(...fileName));
+
+		reply.header("content-type", "application/octet-stream");
+		return reply.send(Buffer.from(blob));
 	},
 });
 
@@ -136,8 +314,8 @@ async function gracefulShutdown() {
 	}
 }
 
-process.on("SIGINT", gracefulShutdown);
-process.on("SIGTERM", gracefulShutdown);
+// process.on("SIGINT", gracefulShutdown);
+// process.on("SIGTERM", gracefulShutdown);
 
 const PORT = 5000;
 app
