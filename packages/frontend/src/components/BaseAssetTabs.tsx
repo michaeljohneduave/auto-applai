@@ -2,48 +2,70 @@ import { useQuery } from "@tanstack/react-query";
 import { useFetchBaseAssets } from "../api";
 import { useUI } from "../contexts/UIContext";
 import Spinner from "./Spinner";
+import { Button } from "./ui/button";
 
 export default function BaseAssetTabs() {
 	const fetchBaseAssets = useFetchBaseAssets();
 	const {
-		data: asset,
+		data: assets,
 		isLoading,
 		isError,
 	} = useQuery({
 		queryKey: ["baseAssets"],
 		queryFn: fetchBaseAssets,
 	});
-	const { selected, selectBaseAsset } = useUI();
+	const { setAsset } = useUI();
 
 	if (isLoading) return <Spinner />;
 	if (isError) return <div>Error loading assets</div>;
 
 	return (
-		<div className="flex border-b">
-			<button
-				type="button"
-				key={asset.baseResume}
-				onClick={() => selectBaseAsset(asset.baseResume)}
-				className={`px-4 py-2 -mb-px border-b-2 ${
-					selected?.id === asset.id && selected?.source === "base"
-						? "border-blue-500 text-blue-500"
-						: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-				}`}
+		<div className="flex gap-1">
+			<Button
+				variant="outline"
+				className="cursor-pointer"
+				onClick={() =>
+					setAsset({
+						id: "base-resume.md",
+						content: assets.baseResumeMd,
+						source: "base",
+						type: "md",
+						name: "Base Resume (MD)",
+					})
+				}
 			>
-				{asset.name}
-			</button>
-			<button
-				type="button"
-				key={asset.personalInfo}
-				onClick={() => selectBaseAsset(asset.personalInfo)}
-				className={`px-4 py-2 -mb-px border-b-2 ${
-					selected?.id === asset.id && selected?.source === "base"
-						? "border-blue-500 text-blue-500"
-						: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-				}`}
+				Resume.md
+			</Button>
+			<Button
+				variant="outline"
+				className="cursor-pointer"
+				onClick={() =>
+					setAsset({
+						id: "base-resume.tex",
+						content: assets.baseResumeLatex,
+						source: "base",
+						type: "latex",
+						name: "Base Resume (Tex)",
+					})
+				}
 			>
-				{asset.name}
-			</button>
+				Resume.tex
+			</Button>
+			<Button
+				variant="outline"
+				className="cursor-pointer"
+				onClick={() =>
+					setAsset({
+						id: "personal-info.md",
+						content: assets.personalInfoMd,
+						source: "base",
+						type: "md",
+						name: "Personal Info",
+					})
+				}
+			>
+				Personal Info
+			</Button>
 		</div>
 	);
 }

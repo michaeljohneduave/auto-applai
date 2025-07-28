@@ -11,7 +11,7 @@
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
-		"noEmit": true
+		"noEmit": true,
 		// /* Linting */
 		// "skipLibCheck": true,
 		// "strict": true,
@@ -19,10 +19,9 @@
 		// "noUnusedParameters": true,
 		// "noFallthroughCasesInSwitch": true,
 		// "noUncheckedSideEffectImports": true,
-		// "baseUrl": ".",
-		// "paths": {
-		//   "@/*": ["./src/*"],
-		//   "@/core": ["../src/*"]
-		// }
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"]
+		}
 	}
 }

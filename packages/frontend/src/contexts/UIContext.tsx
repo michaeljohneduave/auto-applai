@@ -1,39 +1,37 @@
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import { createContext, type ReactNode, useContext, useState } from "react";
 
-type SelectedItem = {
-  id: string;
-  source: 'base' | 'list';
-  type: 'md' | 'pdf' | 'form';
+export type AssetType = "md" | "pdf" | "form" | "latex" | "json";
+
+export type SelectedItem = {
+	id: string;
+	source: "base" | "list";
+	type: AssetType;
+	content: string;
+	name: string;
 } | null;
 
 type UIContextType = {
-  selected: SelectedItem;
-  selectBaseAsset: (id: string) => void;
-  selectListAsset: (itemId: string, kind: 'md' | 'pdf' | 'form') => void;
+	selected: SelectedItem;
+	setAsset: (params: SelectedItem) => void;
 };
 
 const UIContext = createContext<UIContextType>({
-  selected: null,
-  selectBaseAsset: () => {},
-  selectListAsset: () => {},
+	selected: null,
+	setAsset: () => {},
 });
 
 export const UIProvider = ({ children }: { children: ReactNode }) => {
-  const [selected, setSelected] = useState<SelectedItem>(null);
+	const [selected, setSelected] = useState<SelectedItem>(null);
 
-  const selectBaseAsset = (id: string) => {
-    setSelected({ id, source: 'base', type: 'md' });
-  };
+	const setAsset = (params: SelectedItem) => {
+		setSelected(params);
+	};
 
-  const selectListAsset = (itemId: string, kind: 'md' | 'pdf' | 'form') => {
-    setSelected({ id: itemId, source: 'list', type: kind });
-  };
-
-  return (
-    <UIContext.Provider value={{ selected, selectBaseAsset, selectListAsset }}>
-      {children}
-    </UIContext.Provider>
-  );
+	return (
+		<UIContext.Provider value={{ selected, setAsset }}>
+			{children}
+		</UIContext.Provider>
+	);
 };
 
 export const useUI = () => useContext(UIContext);
