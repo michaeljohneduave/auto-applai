@@ -1,5 +1,6 @@
 import { hrtime } from "node:process";
 import { setTimeout } from "node:timers/promises";
+import { db } from "@auto-apply/api/src/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -8,7 +9,6 @@ import type {
 	Prompt,
 } from "@modelcontextprotocol/sdk/types.js";
 import OpenAI from "openai";
-import type { ParsedChatCompletion } from "openai/resources/beta/chat/completions.mjs";
 import type {
 	ChatCompletion,
 	ChatCompletionCreateParamsNonStreaming,
@@ -17,6 +17,7 @@ import type {
 } from "openai/resources.mjs";
 import { randomString } from "remeda";
 import { z } from "zod";
+import { logs } from "./db/schema";
 
 interface MCPClientConfig {
 	name: string;
@@ -89,9 +90,9 @@ export default class LLM {
 
 	#openai: OpenAI;
 	#model = GEMINI_20_FLASH; // Default model
-	#messages: ChatCompletionMessageParam[];
+	#messages: ChatCompletionMessageParam[] = [];
 	#retries = 3;
-	#maxRuns: number;
+	#maxRuns = 10;
 
 	#isReady = true;
 	#useEval = false;
@@ -134,6 +135,8 @@ export default class LLM {
 				options.parallelToolCalls || this.#parallelToolCalls;
 			this.#sessionId = options.sessionId || randomString(10);
 			this.#retries = options.retries || this.#retries;
+		} else {
+			this.#sessionId = randomString(10);
 		}
 	}
 
@@ -338,6 +341,7 @@ ${JSON.stringify(this.getTools())}
 		let completion: ChatCompletion;
 
 		while (true) {
+			const start = hrtime();
 			const completionParams: ChatCompletionCreateParamsNonStreaming = {
 				...params,
 				messages: this.#messages,
@@ -348,7 +352,12 @@ ${JSON.stringify(this.getTools())}
 			completion = await this.#openai.chat.completions.create(completionParams);
 			const [choice] = completion.choices;
 
-			await this.#logLlmCall(completionParams, completion);
+			const diff = hrtime(start);
+			await this.#logLlmCall(
+				completionParams,
+				completion,
+				(diff[0] * 1e9 + diff[1]) / 1e6,
+			);
 
 			if (choice.message.tool_calls) {
 				choice.message.tool_calls = choice.message.tool_calls.map((t) => ({
@@ -408,7 +417,7 @@ ${JSON.stringify(this.getTools())}
 
 		while (true) {
 			runs++;
-
+			const start = hrtime();
 			const completionParams: ChatCompletionCreateParamsNonStreaming = {
 				...params,
 				messages: this.#messages,
@@ -424,7 +433,12 @@ ${JSON.stringify(this.getTools())}
 				totalUsage.completionTokens += completion.usage.completion_tokens;
 			}
 
-			await this.#logLlmCall(completionParams, completion);
+			const diff = hrtime(start);
+			await this.#logLlmCall(
+				completionParams,
+				completion,
+				(diff[0] * 1e9 + diff[1]) / 1e6,
+			);
 
 			if (choice.finish_reason === "stop") {
 				break;
@@ -498,6 +512,7 @@ ${JSON.stringify(this.getTools())}
 
 		while (retries--) {
 			try {
+				const start = hrtime();
 				const completionParams: ChatCompletionCreateParamsNonStreaming = {
 					...params,
 					messages: this.#messages,
@@ -505,44 +520,43 @@ ${JSON.stringify(this.getTools())}
 				};
 				const response =
 					await this.#openai.beta.chat.completions.parse(completionParams);
-
-				await this.#logLlmCall(completionParams, response);
+				const diff = hrtime(start);
+				await this.#logLlmCall(
+					completionParams,
+					response,
+					(diff[0] * 1e9 + diff[1]) / 1e6,
+				);
 
 				return response;
 			} catch (error) {
 				console.error(error);
 				if (retries === 0) {
-					throw new Error(
-						`Error processing query after retries: ${error.message}`,
-					);
+					if (error instanceof Error) {
+						throw new Error(
+							`Error processing query after retries: ${error.message}`,
+						);
+					}
 				}
-				console.warn(`Retrying query due to error: ${error.message}`);
+				if (error instanceof Error) {
+					console.warn(`Retrying query due to error: ${error.message}`);
+				}
 			}
 		}
 
 		throw new Error("Error processing query: Unable to complete after retries");
 	}
 
-	async #logLlmCall<T>(
+	async #logLlmCall(
 		request: ChatCompletionCreateParamsNonStreaming,
-		response: ParsedChatCompletion<T> | ChatCompletion,
+		response: ChatCompletion,
+		duration: number,
 	) {
-		try {
-			// await fetch("http://localhost:5000/log", {
-			// 	method: "POST",
-			// 	headers: {
-			// 		"Content-Type": "application/json",
-			// 	},
-			// 	body: JSON.stringify({
-			// 		sessionId: this.#sessionId,
-			// 		llmName: this.#name,
-			// 		request,
-			// 		response,
-			// 	}),
-			// });
-		} catch (error) {
-			console.error("Failed to log LLM call:", error);
-		}
+		await db.insert(logs).values({
+			requestLog: request,
+			responseLog: response,
+			sessionId: this.#sessionId,
+			duration,
+		});
 	}
 
 	async #waitForReady() {

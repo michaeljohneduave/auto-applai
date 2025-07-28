@@ -1,10 +1,8 @@
-import type { Interface } from "node:readline/promises";
 import { toXML } from "jstoxml";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import type { z } from "zod";
 import LLM, { GEMINI_25_FLASH } from "./llm.ts";
-import { evaluator } from "./evaluator.ts";
 import {
 	type evaluatorSchema,
 	formCompleterSchema,
@@ -13,14 +11,12 @@ import {
 } from "./schema.ts";
 
 export async function formCompleter({
-	readline,
 	applicationDetails,
 	resume,
 	personalMetadata,
 	context,
 	sessionId,
 }: {
-	readline: Interface;
 	applicationDetails: z.infer<typeof jobPostingSchema>;
 	resume: string;
 	personalMetadata: string;
@@ -37,7 +33,7 @@ export async function formCompleter({
 		formAnswers: [],
 		clarificationRequests: [],
 	};
-	let evaluation: z.infer<typeof evaluatorSchema> = [];
+	const evaluation: z.infer<typeof evaluatorSchema> = [];
 
 	// const llm = new LLM("form-completer", {
 	// 	model: grok.models.MINI,
@@ -128,88 +124,88 @@ ${toXML(applicationDetails.applicationForm)}
 
 	llm.setMessages(messages);
 
-	while (true) {
-		const response = await llm.generateStructuredOutput({
-			temperature: 0.3,
-			top_p: 0.9,
-			reasoning_effort: "high",
-			response_format: zodResponseFormat(formCompleterSchema, "form-completer"),
-		});
+	// while (true) {
+	const response = await llm.generateStructuredOutput({
+		temperature: 0.3,
+		top_p: 0.9,
+		reasoning_effort: "high",
+		response_format: zodResponseFormat(formCompleterSchema, "form-completer"),
+	});
 
-		if (!response.choices[0].message.parsed) {
-			throw new Error("Form completer parsed response not found");
-		}
-
-		completedForm = response.choices[0].message.parsed as z.infer<
-			typeof formCompleterSchema
-		>;
-
-		if (!completedForm) {
-			throw new Error("Failed to complete form");
-		}
-
-		if (completedForm.clarificationRequests.length) {
-			for (const q of completedForm.clarificationRequests) {
-				const answer = await readline.question(
-					`${q.questionForUser}\n Your answer: `,
-				);
-
-				clarifications.push({
-					originalQuestion: q.originalQuestion,
-					questionForUser: q.questionForUser,
-					answer: answer,
-				});
-			}
-
-			llm.addMessage({
-				role: "assistant",
-				content: `
-<form-answers>
-${toXML(completedForm.formAnswers)}
-</form-answers>
-
-<clarification-requests>
-${toXML(completedForm.clarificationRequests)}
-</clarification-requests>
-				`,
-			});
-
-			llm.addMessage({
-				role: "user",
-				content: `
-<clarification-answers>
-${toXML(clarifications)}
-</clarification-answers>
-				`,
-			});
-		} else {
-			evaluation = await evaluator(
-				applicationDetails,
-				completedForm,
-				clarifications,
-				resume,
-				context,
-				sessionId,
-			);
-			const totalScore =
-				evaluation.reduce((acc, evl) => evl.grade + acc, 0) / evaluation.length;
-
-			llm.addMessage({
-				role: "user",
-				content: `
-<evaluation>
-${toXML(evaluation)}
-</evaluation>
-        `,
-			});
-
-			if (totalScore < 5) {
-				continue;
-			}
-
-			break;
-		}
+	if (!response.choices[0].message.parsed) {
+		throw new Error("Form completer parsed response not found");
 	}
+
+	completedForm = response.choices[0].message.parsed as z.infer<
+		typeof formCompleterSchema
+	>;
+
+	if (!completedForm) {
+		throw new Error("Failed to complete form");
+	}
+
+	// 		if (completedForm.clarificationRequests.length) {
+	// 			for (const q of completedForm.clarificationRequests) {
+	// 				const answer = await readline.question(
+	// 					`${q.questionForUser}\n Your answer: `,
+	// 				);
+
+	// 				clarifications.push({
+	// 					originalQuestion: q.originalQuestion,
+	// 					questionForUser: q.questionForUser,
+	// 					answer: answer,
+	// 				});
+	// 			}
+
+	// 			llm.addMessage({
+	// 				role: "assistant",
+	// 				content: `
+	// <form-answers>
+	// ${toXML(completedForm.formAnswers)}
+	// </form-answers>
+
+	// <clarification-requests>
+	// ${toXML(completedForm.clarificationRequests)}
+	// </clarification-requests>
+	// 				`,
+	// 			});
+
+	// 			llm.addMessage({
+	// 				role: "user",
+	// 				content: `
+	// <clarification-answers>
+	// ${toXML(clarifications)}
+	// </clarification-answers>
+	// 				`,
+	// 			});
+	// 		} else {
+	// 			evaluation = await evaluator(
+	// 				applicationDetails,
+	// 				completedForm,
+	// 				clarifications,
+	// 				resume,
+	// 				context,
+	// 				sessionId,
+	// 			);
+	// 			const totalScore =
+	// 				evaluation.reduce((acc, evl) => evl.grade + acc, 0) / evaluation.length;
+
+	// 			llm.addMessage({
+	// 				role: "user",
+	// 				content: `
+	// <evaluation>
+	// ${toXML(evaluation)}
+	// </evaluation>
+	//         `,
+	// 			});
+
+	// 			if (totalScore < 5) {
+	// 				continue;
+	// 			}
+
+	// 			break;
+	// 		}
+	// }
 
 	return completedForm;
 }

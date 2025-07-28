@@ -15,7 +15,7 @@ try {
 
 	while (true) {
 		const url = await readline.question("URL: ");
-		await run("cli-user", sessionId, url, readline);
+		await run("cli-user", sessionId, url, "url", readline);
 	}
 } catch (e) {
 	console.error(e);
