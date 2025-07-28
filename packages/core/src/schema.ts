@@ -559,8 +559,3 @@ export const resumeCritiqueSchema = z.object({
 			"The final summary and a prioritized list of actionable steps for the candidate.",
 		),
 });
-
-export const AssetResponseSchema = z.object({
-	baseResumeMd: z.string(),
-	personalInfoMd: z.string(),
-});
