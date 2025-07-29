@@ -88,7 +88,14 @@ export default function ApplicationList() {
 				setAsset({
 					id,
 					content: btoa(binary),
-					name: "generatedResume",
+					name: R.toKebabCase(
+						[
+							session.personalInfo.fullName,
+							session.companyName,
+							session.title,
+							"resume",
+						].join(" "),
+					),
 					source: "list",
 					type: "pdf",
 				});

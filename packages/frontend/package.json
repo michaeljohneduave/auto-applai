@@ -13,8 +13,8 @@
 		"check": "biome check"
 	},
 	"dependencies": {
-		"@auto-apply/api": "*",
-		"@auto-apply/core": "*",
+		"@auto-apply/api": "workspace:*",
+		"@auto-apply/core": "workspace:*",
 		"@clerk/clerk-react": "^5.35.3",
 		"@codemirror/lang-markdown": "^6.3.3",
 		"@codemirror/legacy-modes": "^6.5.1",

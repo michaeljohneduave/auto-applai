@@ -7,7 +7,8 @@ import { EditorView, lineNumbers } from "@codemirror/view";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CodeMirror from "@uiw/react-codemirror";
 import JsonView from "@uiw/react-json-view";
-import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type z from "zod";
 import { cn } from "@/lib/utils";
@@ -113,7 +114,7 @@ export default function AssetDisplayDialog() {
 		}
 	};
 
-	const handleSave = () => {
+	const handleSave = useCallback(() => {
 		if (!isDirty || !selected) {
 			return;
 		}
@@ -125,7 +126,7 @@ export default function AssetDisplayDialog() {
 					? "personalInfoMd"
 					: "baseResumeLatex";
 		saveBaseAssets({ [key]: content });
-	};
+	}, [isDirty, selected, content, saveBaseAssets]);
 
 	const handleReset = () => {
 		setContent(selected?.content || "");
@@ -144,6 +145,29 @@ export default function AssetDisplayDialog() {
 		getPdf({
 			latex: content,
 		});
+	};
+
+	const handleDownloadPdf = (content: string, filename?: string) => {
+		if (!content) return;
+
+		// Create a blob from the base64 data
+		const byteCharacters = atob(content);
+		const byteNumbers = new Array(byteCharacters.length);
+		for (let i = 0; i < byteCharacters.length; i++) {
+			byteNumbers[i] = byteCharacters.charCodeAt(i);
+		}
+		const byteArray = new Uint8Array(byteNumbers);
+		const blob = new Blob([byteArray], { type: "application/pdf" });
+
+		// Create download link
+		const url = window.URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = filename || selected?.name || "document.pdf";
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		window.URL.revokeObjectURL(url);
 	};
 
 	useEffect(() => {
@@ -216,13 +240,29 @@ export default function AssetDisplayDialog() {
 								onCreateEditor={setEditorView}
 							/>
 						</div>
-						<div className="flex col-span-4 overflow-y-auto">
+						<div className="flex col-span-4 overflow-y-auto relative">
 							{derivedContent ? (
-								<iframe
-									title={`${selected.name} PDF`}
-									src={`data:application/pdf;base64,${derivedContent}`}
-									className="w-full h-full"
-								/>
+								<>
+									<iframe
+										title={`${selected.name} PDF`}
+										src={`data:application/pdf;base64,${derivedContent}`}
+										className="w-full h-full"
+									/>
+									<Button
+										onClick={() =>
+											handleDownloadPdf(
+												derivedContent,
+												`${selected.name.replace(".tex", ".pdf")}`,
+											)
+										}
+										variant="outline"
+										size="sm"
+										className="absolute top-2 right-2 z-10"
+									>
+										<Download className="w-4 h-4 mr-2" />
+										Download
+									</Button>
+								</>
 							) : (
 								<div className="flex flex-1 justify-center items-center bg-gray-50">
 									<span className="text-2xl">
@@ -235,12 +275,21 @@ export default function AssetDisplayDialog() {
 				);
 			case "pdf":
 				return (
-					<div className="overflow-auto flex-1 ">
+					<div className="overflow-auto flex-1 relative">
 						<iframe
 							title={`${selected.name} PDF`}
 							src={`data:application/pdf;base64,${selected.content}`}
 							className="w-full h-full"
 						/>
+						<Button
+							onClick={() => handleDownloadPdf(selected.content)}
+							variant="outline"
+							size="sm"
+							className="absolute top-2 right-2 z-10"
+						>
+							<Download className="w-4 h-4 mr-2" />
+							Download
+						</Button>
 					</div>
 				);
 			case "form": {
