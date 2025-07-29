@@ -95,7 +95,7 @@ Parse the Markdown step by step:
 
 1. Header → centered \\textbf{\\Large Name}, location | email (mailto) | website (href).  
 2. Summary → plain paragraph under the center block.  
-3. Sections (“Skills”, “Experience”, “Projects”, “Education”) → \\section*{}  
+3. Sections ("Skills", "Experience", "Projects", "Education") → \\section*{}  
 4. Skills → itemize [label={}], bold sub-categories.  
 5. Experience → for each job use a full-width minipage with \\textbf{\\large Job Title}, Company, Location \\hfill Dates, then itemize bullets. After each entry put \\vspace{2mm}.  
 6. Projects → a single minipage wrapping all projects. For each project, \\textbf{Name} — \\href{url}{url}, then bullets, then \\vspace{2mm}.  
@@ -210,12 +210,10 @@ async function updateSession(
 		.where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId)));
 }
 
-export async function run(
+export async function runWithUrl(
 	userId: string,
 	sessionId: string,
 	jobUrl: string,
-	mode: "url" | "extension",
-	readline?: Interface,
 ) {
 	try {
 		const mdContent: {
@@ -424,6 +422,199 @@ export async function run(
 			latexPdf: Buffer.from(latexPdf),
 			screenshot: Buffer.from(screenshot, "base64"),
 			formUrl,
+			assetPath,
+			completedForm,
+		};
+		await updateSession(userId, sessionId, {
+			status: "done",
+			currentStep: "ready_to_use",
+		});
+		return result;
+	} catch (error) {
+		// const errorMessage =
+		// 	error instanceof Error ? error.message : "Unknown error";
+		await updateSession(userId, sessionId, {
+			status: "failed",
+		});
+		throw error;
+	}
+}
+
+export async function runWithHtml(
+	userId: string,
+	sessionId: string,
+	html: string,
+) {
+	try {
+		const mdContent: {
+			markdown: string;
+			rating: number;
+			url: string;
+			reasoning: string;
+		}[] = [];
+		const {
+			resume: ogResumeMd,
+			latexReferenceResume,
+			personalInfo,
+			personalMetadata,
+		} = await loadApplicationContext(sessionId, userId);
+
+		await updateSession(userId, sessionId, {
+			currentStep: "scraping",
+		});
+
+		const applicationDetails = await extractInfo(html, sessionId);
+
+		console.log("applicationDetails", applicationDetails);
+
+		await updateSession(userId, sessionId, {
+			companyName: applicationDetails.companyInfo.name,
+			title: applicationDetails.jobInfo.title,
+			applicationDetails,
+			personalInfo,
+		});
+
+		// await updateSession(userId, sessionId, {
+		// 	applicationDetails,
+		// 	screenshot: Buffer.from(screenshot, "base64"),
+		// });
+
+		if (!applicationDetails.applicationForm.length) {
+			await updateSession(userId, sessionId, {
+				status: "failed",
+			});
+
+			throw new Error("No application form found");
+		}
+
+		await updateSession(userId, sessionId, {
+			currentStep: "generating_resume",
+		});
+
+		const { adjustedResume, generatedEvals, generatedResumes } =
+			await generateResume(ogResumeMd, applicationDetails, sessionId);
+
+		if (!adjustedResume) {
+			await updateSession(userId, sessionId, {
+				status: "failed",
+			});
+
+			throw new Error("Updated resume not generated");
+		}
+
+		await updateSession(userId, sessionId, {
+			currentStep: "generating_latex",
+		});
+
+		const latexResume = await latexResumeGenerator(
+			latexReferenceResume,
+			adjustedResume,
+			sessionId,
+		);
+
+		await updateSession(userId, sessionId, {
+			currentStep: "generating_pdf",
+		});
+		const latexPdf = await generatePdf(latexResume);
+
+		const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
+		const assetPath = `assets/sessions/${userId}/${companyName}/${sessionId}-${isoFileSuffixUTC(
+			new Date(),
+			{
+				isLocal: true,
+			},
+		)}`;
+
+		// Save assets
+		// await updateSession(userId, sessionId, {
+		// 	currentStep: "saving assets",
+		// 	status: "processing",
+		// });
+
+		await fs.mkdir(assetPath, { recursive: true });
+		await fs.writeFile(
+			`${assetPath}/${toKebabCase(personalInfo.fullName)}-${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-resume.pdf`,
+			Buffer.from(latexPdf),
+		);
+		await fs.writeFile(`${assetPath}/resume.tex`, latexResume);
+		await fs.writeFile(`${assetPath}/adjusted-resume.md`, adjustedResume, {
+			encoding: "utf-8",
+		});
+
+		for (let i = 0; i < generatedResumes.length; i++) {
+			await fs.writeFile(
+				`${assetPath}/generated-resume-${i + 1}.md`,
+				generatedResumes[i],
+				{
+					encoding: "utf-8",
+				},
+			);
+		}
+
+		for (let i = 0; i < generatedEvals.length; i++) {
+			await fs.writeFile(
+				`${assetPath}/resume-eval-${i + 1}.json`,
+				JSON.stringify(generatedEvals[i]),
+			);
+		}
+
+		await fs.writeFile(
+			`${assetPath}/application-details.json`,
+			JSON.stringify(applicationDetails),
+		);
+
+		// Update session with all generated data
+		// await updateSession(userId, sessionId, {
+		// 	company_name: companyName,
+		// 	adjustedResume,
+		// 	latexResume,
+		// 	latexPdf: Buffer.from(latexPdf),
+		// 	formUrl,
+		// 	assetPath,
+		// });
+
+		await updateSession(userId, sessionId, {
+			assetPath,
+		});
+
+		let completedForm: z.infer<typeof formCompleterSchema> | null = null;
+
+		if (applicationDetails.applicationForm.length) {
+			// Complete form with interactive clarifications
+
+			completedForm = await formCompleter({
+				sessionId,
+				applicationDetails,
+				resume: ogResumeMd,
+				personalMetadata,
+				context: mdContent.map((md) => md.markdown),
+			});
+
+			await updateSession(userId, sessionId, {
+				applicationForm: completedForm,
+				coverLetter: completedForm?.coverLetter,
+			});
+
+			await fs.writeFile(
+				`${assetPath}/completedForm.json`,
+				JSON.stringify(completedForm),
+			);
+			await fs.writeFile(
+				`${assetPath}/${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-cover-letter.txt`,
+				completedForm.coverLetter,
+				{ encoding: "utf-8" },
+			);
+		}
+
+		const result = {
+			sessionId,
+			companyName,
+			applicationDetails,
+			adjustedResume,
+			latexResume,
+			latexPdf: Buffer.from(latexPdf),
+			// screenshot: Buffer.from(screenshot, "base64"),
+			// formUrl,
 			assetPath,
 			completedForm,
 		};

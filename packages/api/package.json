@@ -11,7 +11,7 @@
 	"license": "ISC",
 	"description": "",
 	"dependencies": {
-		"@auto-apply/core": "*",
+		"@auto-apply/core": "workspace:*",
 		"@clerk/clerk-sdk-node": "^4.13.23",
 		"@clerk/fastify": "^2.4.10",
 		"@fastify/jwt": "^9.1.0",

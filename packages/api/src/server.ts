@@ -215,6 +215,62 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 	},
 });
 
+// Extension scrape endpoint
+const extensionScrapeSchema = {
+	body: z.object({
+		html: z.string(),
+		url: z.string().url(),
+		userId: z.string().optional(),
+	}),
+};
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "POST",
+	url: "/extension-scrape",
+	schema: extensionScrapeSchema,
+	preHandler: authHandler,
+	handler: (req, reply) => {
+		try {
+			console.log("Extension scrape request received:");
+			console.log("URL:", req.body.url);
+			console.log("HTML length:", req.body.html.length);
+			console.log("User ID:", req.authSession?.userId);
+
+			// Basic validation
+			if (!req.body.html || req.body.html.length < 10) {
+				return reply.code(400).send({
+					success: false,
+					message: "Invalid HTML: too short or empty",
+				});
+			}
+
+			if (!req.body.url || !req.body.html) {
+				return reply.code(400).send({
+					success: false,
+					message: "Invalid URL or HTML provided",
+				});
+			}
+
+			queue.enqueue({
+				jobUrl: req.body.url,
+				html: req.body.html,
+				userId: req.authSession?.userId!,
+			});
+
+			reply.code(200).send({
+				success: true,
+				message: `HTML processed successfully (${req.body.html.length} characters)`,
+			});
+		} catch (error) {
+			console.error("Error processing extension scrape:", error);
+			reply.code(500).send({
+				success: false,
+				message: "Failed to process HTML",
+			});
+		}
+	},
+});
+
 const getSessionsSchema = {
 	querystring: z.object({
 		limit: z.number().optional(),
@@ -317,7 +373,7 @@ async function gracefulShutdown() {
 // process.on("SIGINT", gracefulShutdown);
 // process.on("SIGTERM", gracefulShutdown);
 
-const PORT = 5000;
+const PORT = 5500;
 app
 	.listen({ port: PORT, host: "0.0.0.0" })
 	.then(async () => {
