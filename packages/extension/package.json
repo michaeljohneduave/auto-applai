@@ -1,5 +1,7 @@
 {
-  "name": "extension",
+  "name": "@auto-apply/extension",
+  "private": "true",
+  "type": "module",
   "displayName": "Extension",
   "version": "0.0.1",
   "description": "Browser extension for auto-apply",
