@@ -73,6 +73,73 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 		return true;
 	}
 
+	// Handle storing original tab information for login flow
+	if (request.action === "storeOriginalTab") {
+		chrome.storage.local.set(
+			{
+				originalTabId: request.tabId,
+				originalTabUrl: request.tabUrl,
+			},
+			() => {
+				sendResponse({ success: true });
+			},
+		);
+		return true;
+	}
+
+	// Handle retrieving original tab information
+	if (request.action === "getOriginalTab") {
+		chrome.storage.local.get(["originalTabId", "originalTabUrl"], (result) => {
+			sendResponse({
+				success: true,
+				tabId: result.originalTabId,
+				tabUrl: result.originalTabUrl,
+			});
+		});
+		return true;
+	}
+
+	// Handle clearing original tab information
+	if (request.action === "clearOriginalTab") {
+		chrome.storage.local.remove(["originalTabId", "originalTabUrl"], () => {
+			sendResponse({ success: true });
+		});
+		return true;
+	}
+
+	// Handle return to original tab from frontend
+	if (request.action === "returnToOriginalTab") {
+		const tabId = request.tabId;
+		if (tabId) {
+			chrome.tabs
+				.get(tabId)
+				.then((tab) => {
+					// Focus the original tab
+					return chrome.tabs.update(tabId, { active: true });
+				})
+				.then(() => {
+					// Focus the window containing the tab
+					return chrome.tabs.get(tabId);
+				})
+				.then((tab) => {
+					return chrome.windows.update(tab.windowId, { focused: true });
+				})
+				.then(() => {
+					sendResponse({ success: true });
+				})
+				.catch((error) => {
+					console.error("Error returning to original tab:", error);
+					sendResponse({
+						success: false,
+						error: "Tab not found or cannot be focused",
+					});
+				});
+		} else {
+			sendResponse({ success: false, error: "No tab ID provided" });
+		}
+		return true;
+	}
+
 	// Handle extension scrape requests
 	if (request.action === "extensionScrape") {
 		getToken()
