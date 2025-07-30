@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	ClipboardList,
 	FileClock,
+	FileText,
 	FileUser,
 	Link2,
 	ScrollText,
@@ -49,7 +50,12 @@ export default function ApplicationList() {
 
 	const handleAssetClick = async (
 		id: string,
-		type: "resume" | "cover-letter" | "application-form" | "logs",
+		type:
+			| "resume"
+			| "cover-letter"
+			| "application-form"
+			| "application-details"
+			| "logs",
 	) => {
 		const session = sessions.find((session) => session.id === id);
 
@@ -102,6 +108,15 @@ export default function ApplicationList() {
 
 				break;
 			}
+			case "application-details":
+				setAsset({
+					id,
+					content: JSON.stringify(session.applicationDetails),
+					name: "applicationDetails",
+					source: "list",
+					type: "json",
+				});
+				break;
 			case "logs":
 				setAsset({
 					id,
@@ -130,6 +145,7 @@ export default function ApplicationList() {
 					<th className="p-2">Resume</th>
 					<th className="p-2">Cover Letter</th>
 					<th className="p-2">Form</th>
+					<th className="p-2">Details</th>
 					<th className="p-2">Status</th>
 					<th className="p-2">Step</th>
 					<th className="p-2">URL</th>
@@ -175,6 +191,22 @@ export default function ApplicationList() {
 							>
 								<ClipboardList size={20} />
 							</Button>
+						</td>
+						<td className="p-2">
+							{session.applicationDetails?.applicationForm ? (
+								<Button
+									size="sm"
+									variant="ghost"
+									className="cursor-pointer hover:scale-125"
+									onClick={() =>
+										handleAssetClick(session.id, "application-details")
+									}
+								>
+									<FileText />
+								</Button>
+							) : (
+								<span className="text-gray-500">N/A</span>
+							)}
 						</td>
 						<td className="p-2">
 							{R.pipe(
