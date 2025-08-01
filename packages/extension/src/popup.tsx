@@ -96,7 +96,7 @@ const SignedInContent = () => {
 	const { user } = useUser();
 	const [showReturnGuidance, setShowReturnGuidance] = useState(false);
 	const [originalTabId, setOriginalTabId] = useState<number | null>(null);
-	const [originalTabUrl, setOriginalTabUrl] = useState<string>("");
+	const [_originalTabUrl, setOriginalTabUrl] = useState<string>("");
 
 	useEffect(() => {
 		// Check if we have stored original tab info
@@ -178,8 +178,8 @@ function IndexPopup() {
 			allowedRedirectOrigins={["chrome-extension://*"]}
 			syncHost={SYNC_HOST}
 		>
-			<div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-[600px] plasmo-w-[400px] plasmo-flex-col plasmo-p-4">
-				<header className="plasmo-w-full plasmo-flex plasmo-justify-between plasmo-items-center plasmo-mb-4">
+			<div className="plasmo-flex plasmo-flex-col plasmo-h-[600px] plasmo-w-[400px] plasmo-overflow-hidden">
+				<header className="plasmo-flex-shrink-0 plasmo-w-full plasmo-flex plasmo-justify-between plasmo-items-center plasmo-p-4 plasmo-border-b plasmo-border-gray-200">
 					<h1 className="plasmo-text-lg plasmo-font-semibold">
 						Auto-Apply Extension
 					</h1>
@@ -191,7 +191,7 @@ function IndexPopup() {
 						<UserButton />
 					</SignedIn>
 				</header>
-				<main className="plasmo-grow plasmo-w-full">
+				<main className="plasmo-flex-1 plasmo-w-full plasmo-overflow-y-auto plasmo-p-4">
 					<SignedOut>
 						<SignedOutContent />
 					</SignedOut>

@@ -5,6 +5,24 @@
 @tailwind utilities;
 
 #plasmo-shadow-container {
-  all: initial;
-  box-sizing: border-box;
+	all: initial;
+	box-sizing: border-box;
+}
+
+/* Custom utilities for extension popup */
+@layer utilities {
+	.plasmo-line-clamp-3 {
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.plasmo-break-all {
+		word-break: break-all;
+	}
+
+	.plasmo-break-words {
+		word-break: break-words;
+	}
 }

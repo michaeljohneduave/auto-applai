@@ -561,8 +561,9 @@ export async function runWithHtml(
 			sessionId,
 			{
 				...setObj,
-				title: applicationDetails.jobInfo.title,
-				companyName: applicationDetails.companyInfo.name,
+				title: session.title || applicationDetails.jobInfo.title,
+				companyName:
+					session.companyInfo?.name || applicationDetails.companyInfo.name,
 				currentStep: "generating_resume",
 			},
 			{
@@ -582,54 +583,60 @@ export async function runWithHtml(
 			return;
 		}
 
-		const { adjustedResume, generatedEvals, generatedResumes } =
-			await generateResume(ogResumeMd, applicationDetails, sessionId);
+		let assetPath = session.assetPath;
 
-		await updateSession(userId, sessionId, {
-			currentStep: "generating_latex",
-		});
+		// If the session doesn't have an assetPath, its lacking the generated resume
+		// We only skip this if we encounter a html content for application form (no job+company details)
+		if (!assetPath && !applicationDetails.resumeNotes.length) {
+			const { adjustedResume, generatedEvals, generatedResumes } =
+				await generateResume(ogResumeMd, applicationDetails, sessionId);
 
-		const latexResume = await latexResumeGenerator(
-			latexReferenceResume,
-			adjustedResume,
-			sessionId,
-		);
+			await updateSession(userId, sessionId, {
+				currentStep: "generating_latex",
+			});
 
-		await updateSession(userId, sessionId, {
-			currentStep: "generating_pdf",
-		});
+			const latexResume = await latexResumeGenerator(
+				latexReferenceResume,
+				adjustedResume,
+				sessionId,
+			);
 
-		const latexPdf = await generatePdf(latexResume);
+			await updateSession(userId, sessionId, {
+				currentStep: "generating_pdf",
+			});
 
-		const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
-		const assetPath = `assets/sessions/${userId}/${companyName}/${sessionId}-${isoFileSuffixUTC(
-			new Date(),
-			{
-				isLocal: true,
-			},
-		)}`;
+			const latexPdf = await generatePdf(latexResume);
 
-		// Save assets
-		await updateSession(userId, sessionId, {
-			currentStep: "saving_assets",
-			status: "processing",
-		});
+			const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
+			assetPath = `assets/sessions/${userId}/${companyName}/${sessionId}-${isoFileSuffixUTC(
+				new Date(),
+				{
+					isLocal: true,
+				},
+			)}`;
 
-		await saveAssets(
-			userId,
-			sessionId,
-			applicationDetails,
-			personalInfo,
-			latexResume,
-			adjustedResume,
-			latexPdf,
-			generatedResumes,
-			generatedEvals,
-		);
+			// Save assets
+			await updateSession(userId, sessionId, {
+				currentStep: "saving_assets",
+				status: "processing",
+			});
 
-		await updateSession(userId, sessionId, {
-			assetPath,
-		});
+			await saveAssets(
+				userId,
+				sessionId,
+				applicationDetails,
+				personalInfo,
+				latexResume,
+				adjustedResume,
+				latexPdf,
+				generatedResumes,
+				generatedEvals,
+			);
+
+			await updateSession(userId, sessionId, {
+				assetPath,
+			});
+		}
 
 		// Complete form with interactive clarifications
 		const completedForm = await formCompleter({

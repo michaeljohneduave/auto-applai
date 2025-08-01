@@ -165,7 +165,16 @@ export const jobPostingSchema = z.object({
 	companyInfo: z
 		.object({
 			name: z.string().describe("The name of the company."),
-			shortName: z.string().describe("The short one word name of the company"),
+			shortName: z
+				.string()
+				.describe(
+					"The short one word name of the company, Blank if not present in the job details.",
+				),
+			isConfidential: z
+				.boolean()
+				.describe(
+					"Whether the company is confidential and not present in the job details.",
+				),
 			location: z
 				.string()
 				.describe(
@@ -206,6 +215,7 @@ export const jobPostingSchema = z.object({
 	jobInfo: z
 		.object({
 			title: z.string().describe("The title of the job posting."),
+			shortTitle: z.string().describe("The short title of the job posting."),
 			description: z.string().describe("The main description of the job role."),
 			// Changed arrays back to just .optional(). An empty array [] is the
 			// canonical "no items" for a list, not null.
@@ -288,16 +298,6 @@ export const jobPostingSchema = z.object({
 			applicationDeadline: z
 				.string()
 				.describe("The date the application deadline is, in ISO 8601 format."),
-			linkedin: z
-				.object({
-					jobId: z.string().describe("The job id on LinkedIn."),
-					companyId: z.string().describe("The company id on LinkedIn."),
-					easyApply: z
-						.boolean()
-						.describe("Whether the job is an easy apply job on LinkedIn."),
-				})
-				.describe("LinkedIn specific job details"),
-			jobBoard: z.string().describe("The job board the job is posted on."),
 		})
 		.describe("Detailed information about the job posting itself."),
 
@@ -305,7 +305,28 @@ export const jobPostingSchema = z.object({
 		z.string().describe("The detailed steps of the application process"),
 	),
 
-	url: z.string().describe("The final url for the job application"),
+	linkedin: z
+		.object({
+			jobId: z.string().describe("The job id on LinkedIn."),
+			companyId: z.string().describe("The company id on LinkedIn."),
+			easyApply: z
+				.boolean()
+				.describe("Whether the job is an easy apply job on LinkedIn."),
+		})
+		.describe("LinkedIn specific job details"),
+	jobBoard: z.string().describe("The job board the job is posted on."),
+
+	url: z
+		.string()
+		.describe(
+			"The final url for the job application, without unnecessary parameters",
+		),
+
+	siteUrls: z
+		.array(z.string())
+		.describe(
+			"The relevant urls present in the site, without unnecessary parameters",
+		),
 
 	antiBotMeasures: z
 		.array(z.string())
@@ -320,6 +341,11 @@ export const jobPostingSchema = z.object({
 		.describe(
 			"Whether the scrape was successful and information was extracted.",
 		),
+
+	resumeNotes: z.array(z.string()).describe("Notes about the resume, if any"),
+	coverLetterNotes: z
+		.array(z.string())
+		.describe("Notes about the cover letter, if any"),
 });
 
 export const cleanedHtmlSchema = z.object({

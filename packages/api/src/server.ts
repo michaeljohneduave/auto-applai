@@ -21,7 +21,7 @@ import {
 	users,
 } from "@auto-apply/core/src/db/schema";
 import { queue } from "@auto-apply/core/src/utils/queue.ts";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { toKebabCase } from "remeda";
 import { z } from "zod";
 import { db } from "./db.ts";
@@ -206,8 +206,12 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 	schema: postSessionsSchema,
 	preHandler: authHandler,
 	handler: (req, reply) => {
+		const url = new URL(req.body.jobUrl);
+		// Remove all search params
+		url.search = "";
+
 		queue.enqueue({
-			jobUrl: req.body.jobUrl,
+			jobUrl: url.toString(),
 			userId: req.authSession?.userId!,
 		});
 
@@ -273,13 +277,14 @@ app.withTypeProvider<ZodTypeProvider>().route({
 
 const getSessionsSchema = {
 	querystring: z.object({
-		limit: z.number().optional(),
+		limit: z.number().optional().default(10),
 		skip: z.number().optional(),
+		includeLogs: z.enum(["true", "false"]).optional().default("false"),
 	}),
 };
 export type GetSessionsResponse = Array<
 	Sessions & {
-		logs: Logs[];
+		logs?: Logs[];
 	}
 >;
 export type GetSessionsQueryString = z.infer<
@@ -295,11 +300,53 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 	preHandler: authHandler,
 	handler: async (req) => {
 		const response = await db.query.sessions.findMany({
-			where: (sessions) => eq(sessions.userId, req.authSession.userId!),
+			where: (sessions) =>
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					isNull(sessions.deletedAt),
+				),
 			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
 			with: {
-				logs: true,
+				logs: req.query.includeLogs === "true" ? true : undefined,
 			},
+			limit: req.query.limit,
+		});
+
+		return response;
+	},
+});
+
+// New endpoint to get session by URL
+const getSessionByUrlSchema = {
+	querystring: z.object({
+		url: z.string().url(),
+	}),
+};
+export type GetSessionByUrlResponse = Sessions | null;
+export type GetSessionByUrlQueryString = z.infer<
+	typeof getSessionByUrlSchema.querystring
+>;
+app.withTypeProvider<ZodTypeProvider>().route<{
+	Querystring: GetSessionByUrlQueryString;
+	Reply: GetSessionByUrlResponse;
+}>({
+	method: "GET",
+	url: "/sessions/by-url",
+	schema: getSessionByUrlSchema,
+	preHandler: authHandler,
+	handler: async (req) => {
+		const splitUrl = req.query.url.split("/");
+
+		const response = await db.query.sessions.findFirst({
+			where: (sessions) =>
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					or(
+						eq(sessions.url, req.query.url),
+						eq(sessions.url, splitUrl.slice(0, -1).join("/")),
+					),
+				),
+			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
 		});
 
 		return response;
