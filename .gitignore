@@ -1,5 +1,7 @@
 tmp/
 **/assets/**
+!packages/frontend/public/assets/**
+!packages/extension/assets/**
 node_modules
 .env
 .env.local

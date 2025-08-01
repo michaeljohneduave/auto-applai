@@ -1,48 +1,47 @@
 {
-  "name": "@auto-apply/extension",
-  "private": "true",
-  "type": "module",
-  "displayName": "Extension",
-  "version": "0.0.1",
-  "description": "Browser extension for auto-apply",
-  "author": "Mike",
-  "scripts": {
-    "dev": "plasmo dev",
-    "build": "plasmo build",
-    "package": "plasmo package"
-  },
-  "dependencies": {
-    "@clerk/chrome-extension": "^2.5.13",
-    "plasmo": "0.90.5",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "tailwindcss": "3.4.1"
-  },
-  "devDependencies": {
-    "@ianvs/prettier-plugin-sort-imports": "4.1.1",
-    "@types/chrome": "0.0.258",
-    "@types/node": "20.11.5",
-    "@types/react": "18.2.48",
-    "@types/react-dom": "18.2.18",
-    "postcss": "8.4.33",
-    "prettier": "3.2.4",
-    "typescript": "5.3.3"
-  },
-  "manifest": {
-    "key": "$CRX_PUBLIC_KEY",
-    "permissions": [
-      "cookies",
-      "storage",
-      "tabs",
-      "activeTab"
-    ],
-    "host_permissions": [
-      "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
-      "$CLERK_FRONTEND_API/*",
-      "http://localhost:5500/*"
-    ],
-    "background": {
-      "service_worker": "background/index.ts"
-    }
-  }
+	"name": "@auto-apply/extension",
+	"private": "true",
+	"displayName": "Extension",
+	"version": "0.0.1",
+	"description": "Browser extension for auto-apply",
+	"author": "Mike",
+	"scripts": {
+		"dev": "plasmo dev",
+		"build": "plasmo build",
+		"package": "plasmo package"
+	},
+	"dependencies": {
+		"@clerk/chrome-extension": "^2.5.13",
+		"plasmo": "0.90.5",
+		"react": "18.2.0",
+		"react-dom": "18.2.0",
+		"tailwindcss": "3.4.1"
+	},
+	"devDependencies": {
+		"@ianvs/prettier-plugin-sort-imports": "4.1.1",
+		"@types/chrome": "0.0.258",
+		"@types/node": "20.11.5",
+		"@types/react": "18.2.48",
+		"@types/react-dom": "18.2.18",
+		"postcss": "8.4.33",
+		"prettier": "3.2.4",
+		"typescript": "5.3.3"
+	},
+	"manifest": {
+		"key": "$CRX_PUBLIC_KEY",
+		"permissions": [
+			"cookies",
+			"storage",
+			"tabs",
+			"activeTab"
+		],
+		"host_permissions": [
+			"$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
+			"$CLERK_FRONTEND_API/*",
+			"http://localhost:5500/*"
+		],
+		"background": {
+			"service_worker": "background/index.ts"
+		}
+	}
 }
