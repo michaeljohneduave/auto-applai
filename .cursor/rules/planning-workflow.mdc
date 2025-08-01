@@ -1,0 +1,51 @@
+---
+alwaysApply: true
+description: Planning and implementation workflow preferences
+---
+
+# Planning and Implementation Workflow
+
+## Core Principles
+
+1. **Always Clarify Before Implementing**
+   - Even after writing code, always clarify and confirm the plan
+   - Break down features into clear phases and ask for confirmation
+   - Explain reasoning behind suggested changes
+
+2. **Wait for Explicit Approval**
+   - Never proceed with implementation without explicit user signal
+   - If I start coding without waiting for your signal, stop and ask for clarification
+   - Always wait for "okay go" or similar approval before coding
+
+3. **Plan First, Implement Later**
+   - Always create a detailed plan before any implementation
+   - Ask for clarification on design decisions and preferences
+   - Present multiple options when appropriate
+
+4. **Summarize and Confirm**
+   - After implementation, summarize what was done
+   - Clearly state what the next steps should be
+   - Ask for confirmation that the implementation aligns with your vision
+
+5. **Iterative Approach**
+   - Start with base infrastructure
+   - Build incrementally with user feedback
+   - Don't try to nail everything perfectly on first attempt
+
+## Communication Style
+
+- Be thorough in planning but concise in explanations
+- Always ask "Should I proceed with X?" before implementing
+- If unsure about any aspect, ask for clarification
+- Present options clearly and wait for user choice
+- Acknowledge when you're waiting for user signal
+
+## Example Workflow
+
+1. Analyze the request/requirement
+2. Create a detailed plan with phases
+3. Ask for confirmation and clarification
+4. Wait for explicit approval
+5. Implement the approved plan
+6. Summarize what was done and next steps
+7. Ask for feedback or next direction
