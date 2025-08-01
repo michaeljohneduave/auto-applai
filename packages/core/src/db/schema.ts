@@ -79,6 +79,11 @@ export const sessions = sqliteTable("sessions", {
 		})
 		.$type<SessionCost | null>(),
 	assetPath: t.text("asset_path"),
+	applied: t
+		.integer({
+			mode: "boolean",
+		})
+		.default(false),
 	createdAt: t
 		.integer({
 			mode: "number",
@@ -89,6 +94,9 @@ export const sessions = sqliteTable("sessions", {
 			mode: "number",
 		})
 		.$onUpdate(() => sql`(unixepoch() * 1000)`),
+	deletedAt: t.integer({
+		mode: "number",
+	}),
 });
 
 export const logs = sqliteTable("session_logs", {

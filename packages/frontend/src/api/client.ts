@@ -66,5 +66,24 @@ export const useApiClient = () => {
 		return response.json();
 	};
 
-	return { get, post, put };
+	const del = async (
+		path: string,
+		responseType: "json" | "arraybuffer" = "json",
+	) => {
+		const response = await fetch(`${apiUrl}${path}`, {
+			method: "DELETE",
+		});
+
+		if (!response.ok) {
+			throw new Error(response.statusText);
+		}
+
+		if (responseType === "arraybuffer") {
+			return response.arrayBuffer();
+		}
+
+		return response.json();
+	};
+
+	return { get, post, put, delete: del };
 };

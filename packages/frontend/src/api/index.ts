@@ -4,6 +4,7 @@ import type {
 	PostAssetsPdfBody,
 	PostSessionsBody,
 	PutAssetsBody,
+	PutSessionAppliedBody,
 } from "@auto-apply/api/src/server.ts";
 import { useApiClient } from "./client";
 
@@ -27,7 +28,8 @@ export const useGeneratePdf = () => {
 
 export const useFetchSessions = () => {
 	const apiClient = useApiClient();
-	return (): Promise<GetSessionsResponse> => apiClient.get("/sessions");
+	return (): Promise<GetSessionsResponse> =>
+		apiClient.get("/sessions?includeLogs=true");
 };
 
 export const useFetchAssetContent = (id: string) => {
@@ -57,4 +59,15 @@ export const useUpdateAssetContent = (id: string) => {
 	return async (content: string) => {
 		await apiClient.post(`/assets/${id}`, { content });
 	};
+};
+
+export const useUpdateSessionApplied = () => {
+	const apiClient = useApiClient();
+	return (sessionId: string, body: PutSessionAppliedBody) =>
+		apiClient.put(`/sessions/${sessionId}/applied`, body);
+};
+
+export const useDeleteSession = () => {
+	const apiClient = useApiClient();
+	return (sessionId: string) => apiClient.delete(`/sessions/${sessionId}`);
 };

@@ -357,6 +357,68 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
+const putSessionAppliedSchema = {
+	body: z.object({
+		applied: z.boolean(),
+	}),
+	params: z.object({
+		sessionId: z.string(),
+	}),
+};
+export type PutSessionAppliedBody = z.infer<
+	typeof putSessionAppliedSchema.body
+>;
+export type PutSessionAppliedParams = z.infer<
+	typeof putSessionAppliedSchema.params
+>;
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "PUT",
+	url: "/sessions/:sessionId/applied",
+	schema: putSessionAppliedSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		await db
+			.update(sessions)
+			.set({ applied: req.body.applied })
+			.where(
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.params.sessionId),
+				),
+			);
+
+		reply.send(200);
+	},
+});
+
+const deleteSessionSchema = {
+	params: z.object({
+		sessionId: z.string(),
+	}),
+};
+export type DeleteSessionParams = z.infer<typeof deleteSessionSchema.params>;
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "DELETE",
+	url: "/sessions/:sessionId",
+	schema: deleteSessionSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		await db
+			.update(sessions)
+			.set({ deletedAt: Date.now() })
+			.where(
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.params.sessionId),
+				),
+			);
+
+		reply.send(200);
+	},
+});
+
 // Graceful shutdown handling
 async function gracefulShutdown() {
 	app.log.info("Shutting down gracefully...");
