@@ -9,7 +9,7 @@ export async function extractInfo(
 	sessionId: string,
 ): Promise<z.infer<typeof jobPostingSchema>> {
 	console.log("Extracting Job information");
-	const llm = new LLM("JobInfoExtractor", {
+	const llm = new LLM("JobCompanyApplicationExtractor", {
 		model: GEMINI_25_FLASH,
 		sessionId,
 	});
@@ -72,14 +72,6 @@ Strictly follow the jobPostingSchema structure with all required fields.
 		{
 			role: "user",
 			content: html,
-			// content: [
-			// 	{
-			// 		type: "image_url",
-			// 		image_url: {
-			// 			url: `data:image/png;base64,${base64Screenshot}`,
-			// 		},
-			// 	},
-			// ],
 		},
 	];
 
@@ -87,12 +79,150 @@ Strictly follow the jobPostingSchema structure with all required fields.
 
 	const response = await llm.generateStructuredOutput({
 		temperature: 0.1,
-		reasoning_effort: "high",
+		reasoning_effort: "medium",
 		response_format: zodResponseFormat(jobPostingSchema, "job-info"),
 	});
 
 	if (!response.choices[0].message.parsed) {
 		throw new Error("Failed to extract job info");
+	}
+
+	return response.choices[0].message.parsed;
+}
+
+export async function extractJobInfo(html: string, sessionId: string) {
+	const llm = new LLM("JobInfoExtractor", {
+		model: GEMINI_25_FLASH,
+		sessionId,
+	});
+
+	const messages: ChatCompletionMessageParam[] = [
+		{
+			role: "system",
+			content: `
+# Identity
+You are a senior job posting analyst specializing in structured data extraction.
+
+# Goal
+Given an image or html, extract 100% accurate job information in structured format.
+
+# Output Format
+Strictly follow the job-info structure with all required fields.
+`,
+		},
+		{
+			role: "user",
+			content: html,
+		},
+	];
+
+	llm.setMessages(messages);
+
+	const response = await llm.generateStructuredOutput({
+		temperature: 0.1,
+		reasoning_effort: "medium",
+		response_format: zodResponseFormat(
+			jobPostingSchema.shape.jobInfo,
+			"job-info",
+		),
+	});
+
+	if (!response.choices[0].message.parsed) {
+		throw new Error("Failed to extract job info");
+	}
+
+	return response.choices[0].message.parsed;
+}
+
+export async function extractApplicationForm(html: string, sessionId: string) {
+	const llm = new LLM("ApplicationFormExtractor", {
+		model: GEMINI_25_FLASH,
+		sessionId,
+	});
+
+	const messages: ChatCompletionMessageParam[] = [
+		{
+			role: "system",
+			content: `
+# Identity
+You are a senior job posting analyst specializing in structured data extraction.
+
+# Goal
+Given an image or html, extract 100% accurate job application form information in structured format.
+
+# Output Format
+Strictly follow the application-form structure with all required fields.
+
+# Validation Criteria
+- All required fields must be identified
+- Questions must be clear and answerable
+- Field types must be correctly classified
+- Form structure must be complete
+`,
+		},
+		{
+			role: "user",
+			content: html,
+		},
+	];
+
+	llm.setMessages(messages);
+
+	const response = await llm.generateStructuredOutput({
+		temperature: 0.1,
+		reasoning_effort: "medium",
+		response_format: zodResponseFormat(
+			jobPostingSchema.shape.applicationForm,
+			"application-form",
+		),
+	});
+
+	if (!response.choices[0].message.parsed) {
+		throw new Error("Failed to extract application form");
+	}
+
+	return response.choices[0].message.parsed;
+}
+
+export async function extractCompanyInfo(html: string, sessionId: string) {
+	const llm = new LLM("CompanyInfoExtractor", {
+		model: GEMINI_25_FLASH,
+		sessionId,
+	});
+
+	const messages: ChatCompletionMessageParam[] = [
+		{
+			role: "system",
+			content: `
+# Identity
+You are a senior job posting analyst specializing in structured data extraction.
+
+# Goal
+Given an image or html, extract 100% accurate company information in structured format.
+
+# Output Format
+Strictly follow the company-info structure with all required fields.
+`,
+		},
+		{
+			role: "user",
+			content: html,
+		},
+	];
+
+	llm.setMessages(messages);
+
+	const response = await llm.generateStructuredOutput({
+		temperature: 0.1,
+		reasoning_effort: "medium",
+		response_format: zodResponseFormat(
+			jobPostingSchema.shape.companyInfo,
+			"company-info",
+		),
+	});
+
+	if (!response.choices[0].message.parsed) {
+		throw new Error("Failed to extract company info");
 	}
 
 	return response.choices[0].message.parsed;

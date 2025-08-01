@@ -50,12 +50,7 @@ export default function ApplicationList() {
 
 	const handleAssetClick = async (
 		id: string,
-		type:
-			| "resume"
-			| "cover-letter"
-			| "application-form"
-			| "application-details"
-			| "logs",
+		type: "resume" | "cover-letter" | "answered-form" | "logs",
 	) => {
 		const session = sessions.find((session) => session.id === id);
 
@@ -65,11 +60,11 @@ export default function ApplicationList() {
 		}
 
 		switch (type) {
-			case "application-form":
+			case "answered-form":
 				setAsset({
-					content: JSON.stringify(session.applicationForm),
+					content: JSON.stringify(session.answeredForm),
 					id: session.id,
-					name: "application-form",
+					name: "answered-form",
 					source: "list",
 					type: "form",
 				});
@@ -97,10 +92,12 @@ export default function ApplicationList() {
 					name: R.toKebabCase(
 						[
 							session.personalInfo.fullName,
-							session.companyName,
+							session.companyInfo?.shortName,
 							session.title,
 							"resume",
-						].join(" "),
+						]
+							.join(" ")
+							.replace(".", ""),
 					),
 					source: "list",
 					type: "pdf",
@@ -108,15 +105,6 @@ export default function ApplicationList() {
 
 				break;
 			}
-			case "application-details":
-				setAsset({
-					id,
-					content: JSON.stringify(session.applicationDetails),
-					name: "applicationDetails",
-					source: "list",
-					type: "json",
-				});
-				break;
 			case "logs":
 				setAsset({
 					id,
@@ -145,7 +133,6 @@ export default function ApplicationList() {
 					<th className="p-2">Resume</th>
 					<th className="p-2">Cover Letter</th>
 					<th className="p-2">Form</th>
-					<th className="p-2">Details</th>
 					<th className="p-2">Status</th>
 					<th className="p-2">Step</th>
 					<th className="p-2">URL</th>
@@ -156,7 +143,7 @@ export default function ApplicationList() {
 			<tbody>
 				{sessions.map((session) => (
 					<tr key={session.id} className="border-b hover:bg-gray-50">
-						<td className="p-2">{session.companyName}</td>
+						<td className="p-2">{session.companyInfo?.name}</td>
 						<td className="p-2">{session.title}</td>
 						<td className="p-2">
 							{session.assetPath && (
@@ -187,26 +174,10 @@ export default function ApplicationList() {
 								size="sm"
 								variant="ghost"
 								className="cursor-pointer hover:scale-125"
-								onClick={() => handleAssetClick(session.id, "application-form")}
+								onClick={() => handleAssetClick(session.id, "answered-form")}
 							>
 								<ClipboardList size={20} />
 							</Button>
-						</td>
-						<td className="p-2">
-							{session.applicationDetails?.applicationForm ? (
-								<Button
-									size="sm"
-									variant="ghost"
-									className="cursor-pointer hover:scale-125"
-									onClick={() =>
-										handleAssetClick(session.id, "application-details")
-									}
-								>
-									<FileText />
-								</Button>
-							) : (
-								<span className="text-gray-500">N/A</span>
-							)}
 						</td>
 						<td className="p-2">
 							{R.pipe(

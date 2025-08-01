@@ -14,8 +14,10 @@ import { formCompleter } from "./formCompletion.ts";
 import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
 import {
 	type formCompleterSchema,
+	type jobPostingSchema,
 	latexResumeSchema,
 	personalInfoSchema,
+	type resumeCritiqueSchema,
 } from "./schema.ts";
 import { handleCaptcha, htmlCrawler, isoFileSuffixUTC } from "./utils.ts";
 
@@ -199,15 +201,78 @@ ${user.personalInfoMd}
 	}
 }
 
+async function saveAssets(
+	userId: string,
+	sessionId: string,
+	applicationDetails: z.infer<typeof jobPostingSchema>,
+	personalInfo: z.infer<typeof personalInfoSchema>,
+	latexResume: string,
+	adjustedResume: string,
+	latexPdf: ArrayBuffer,
+	generatedResumes: string[],
+	generatedEvals: z.infer<typeof resumeCritiqueSchema>[],
+) {
+	const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
+	const assetPath = `assets/sessions/${userId}/${companyName}/${sessionId}-${isoFileSuffixUTC(
+		new Date(),
+		{
+			isLocal: true,
+		},
+	)}`;
+
+	await fs.mkdir(assetPath, { recursive: true });
+	await fs.writeFile(
+		`${assetPath}/${toKebabCase(personalInfo.fullName)}-${toKebabCase(applicationDetails.companyInfo.shortName.toLowerCase())}-resume.pdf`,
+		Buffer.from(latexPdf),
+	);
+	await fs.writeFile(`${assetPath}/resume.tex`, latexResume);
+	await fs.writeFile(`${assetPath}/adjusted-resume.md`, adjustedResume, {
+		encoding: "utf-8",
+	});
+
+	for (let i = 0; i < generatedResumes.length; i++) {
+		await fs.writeFile(
+			`${assetPath}/generated-resume-${i + 1}.md`,
+			generatedResumes[i],
+			{
+				encoding: "utf-8",
+			},
+		);
+	}
+
+	for (let i = 0; i < generatedEvals.length; i++) {
+		await fs.writeFile(
+			`${assetPath}/resume-eval-${i + 1}.json`,
+			JSON.stringify(generatedEvals[i]),
+		);
+	}
+
+	await fs.writeFile(
+		`${assetPath}/application-details.json`,
+		JSON.stringify(applicationDetails),
+	);
+}
+
 async function updateSession(
 	userId: string,
 	sessionId: string,
 	setObj: Partial<Omit<Sessions, "id" | "userId" | "url">>,
+	options: {
+		shouldReturn?: boolean;
+	} = {
+		shouldReturn: false,
+	},
 ) {
-	await db
+	const op = db
 		.update(sessions)
 		.set(setObj)
 		.where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId)));
+
+	if (options.shouldReturn) {
+		return await op.returning().then((res) => res[0]);
+	}
+
+	await op;
 }
 
 export async function runWithUrl(
@@ -264,9 +329,10 @@ export async function runWithUrl(
 		}
 
 		await updateSession(userId, sessionId, {
-			companyName: applicationDetails.companyInfo.name,
 			title: applicationDetails.jobInfo.title,
-			applicationDetails,
+			companyInfo: applicationDetails.companyInfo,
+			jobInfo: applicationDetails.jobInfo,
+			applicationForm: applicationDetails.applicationForm,
 			personalInfo,
 		});
 
@@ -398,7 +464,7 @@ export async function runWithUrl(
 			});
 
 			await updateSession(userId, sessionId, {
-				applicationForm: completedForm,
+				answeredForm: completedForm,
 				coverLetter: completedForm?.coverLetter,
 			});
 
@@ -459,48 +525,65 @@ export async function runWithHtml(
 			personalMetadata,
 		} = await loadApplicationContext(sessionId, userId);
 
-		await updateSession(userId, sessionId, {
-			currentStep: "scraping",
-		});
+		let session = await updateSession(
+			userId,
+			sessionId,
+			{
+				currentStep: "extracting_info",
+			},
+			{
+				shouldReturn: true,
+			},
+		);
 
-		const applicationDetails = await extractInfo(html, sessionId);
-
-		console.log("applicationDetails", applicationDetails);
-
-		await updateSession(userId, sessionId, {
-			companyName: applicationDetails.companyInfo.name,
-			title: applicationDetails.jobInfo.title,
-			applicationDetails,
-			personalInfo,
-		});
-
-		// await updateSession(userId, sessionId, {
-		// 	applicationDetails,
-		// 	screenshot: Buffer.from(screenshot, "base64"),
-		// });
-
-		if (!applicationDetails.applicationForm.length) {
-			await updateSession(userId, sessionId, {
-				status: "failed",
-			});
-
-			throw new Error("No application form found");
+		if (!session) {
+			throw new Error("Attempted to update session but it failed");
 		}
 
-		await updateSession(userId, sessionId, {
-			currentStep: "generating_resume",
-		});
+		const applicationDetails = await extractInfo(html, sessionId);
+		const setObj = {
+			personalInfo,
+		} as Partial<Sessions>;
+		if (applicationDetails.applicationForm && !session.applicationForm) {
+			setObj.applicationForm = applicationDetails.applicationForm;
+		}
+
+		if (applicationDetails.companyInfo && !session.companyInfo) {
+			setObj.companyInfo = applicationDetails.companyInfo;
+		}
+
+		if (applicationDetails.jobInfo && !session.jobInfo) {
+			setObj.jobInfo = applicationDetails.jobInfo;
+		}
+
+		session = await updateSession(
+			userId,
+			sessionId,
+			{
+				...setObj,
+				title: applicationDetails.jobInfo.title,
+				companyName: applicationDetails.companyInfo.name,
+				currentStep: "generating_resume",
+			},
+			{
+				shouldReturn: true,
+			},
+		);
+
+		if (!session) {
+			throw new Error("Failed to update session");
+		}
+
+		if (!(session.jobInfo && session.companyInfo)) {
+			await updateSession(userId, sessionId, {
+				status: "no-job-info",
+			});
+
+			return;
+		}
 
 		const { adjustedResume, generatedEvals, generatedResumes } =
 			await generateResume(ogResumeMd, applicationDetails, sessionId);
-
-		if (!adjustedResume) {
-			await updateSession(userId, sessionId, {
-				status: "failed",
-			});
-
-			throw new Error("Updated resume not generated");
-		}
 
 		await updateSession(userId, sessionId, {
 			currentStep: "generating_latex",
@@ -515,6 +598,7 @@ export async function runWithHtml(
 		await updateSession(userId, sessionId, {
 			currentStep: "generating_pdf",
 		});
+
 		const latexPdf = await generatePdf(latexResume);
 
 		const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
@@ -526,106 +610,56 @@ export async function runWithHtml(
 		)}`;
 
 		// Save assets
-		// await updateSession(userId, sessionId, {
-		// 	currentStep: "saving assets",
-		// 	status: "processing",
-		// });
-
-		await fs.mkdir(assetPath, { recursive: true });
-		await fs.writeFile(
-			`${assetPath}/${toKebabCase(personalInfo.fullName)}-${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-resume.pdf`,
-			Buffer.from(latexPdf),
-		);
-		await fs.writeFile(`${assetPath}/resume.tex`, latexResume);
-		await fs.writeFile(`${assetPath}/adjusted-resume.md`, adjustedResume, {
-			encoding: "utf-8",
+		await updateSession(userId, sessionId, {
+			currentStep: "saving_assets",
+			status: "processing",
 		});
 
-		for (let i = 0; i < generatedResumes.length; i++) {
-			await fs.writeFile(
-				`${assetPath}/generated-resume-${i + 1}.md`,
-				generatedResumes[i],
-				{
-					encoding: "utf-8",
-				},
-			);
-		}
-
-		for (let i = 0; i < generatedEvals.length; i++) {
-			await fs.writeFile(
-				`${assetPath}/resume-eval-${i + 1}.json`,
-				JSON.stringify(generatedEvals[i]),
-			);
-		}
-
-		await fs.writeFile(
-			`${assetPath}/application-details.json`,
-			JSON.stringify(applicationDetails),
+		await saveAssets(
+			userId,
+			sessionId,
+			applicationDetails,
+			personalInfo,
+			latexResume,
+			adjustedResume,
+			latexPdf,
+			generatedResumes,
+			generatedEvals,
 		);
-
-		// Update session with all generated data
-		// await updateSession(userId, sessionId, {
-		// 	company_name: companyName,
-		// 	adjustedResume,
-		// 	latexResume,
-		// 	latexPdf: Buffer.from(latexPdf),
-		// 	formUrl,
-		// 	assetPath,
-		// });
 
 		await updateSession(userId, sessionId, {
 			assetPath,
 		});
 
-		let completedForm: z.infer<typeof formCompleterSchema> | null = null;
-
-		if (applicationDetails.applicationForm.length) {
-			// Complete form with interactive clarifications
-
-			completedForm = await formCompleter({
-				sessionId,
-				applicationDetails,
-				resume: ogResumeMd,
-				personalMetadata,
-				context: mdContent.map((md) => md.markdown),
-			});
-
-			await updateSession(userId, sessionId, {
-				applicationForm: completedForm,
-				coverLetter: completedForm?.coverLetter,
-			});
-
-			await fs.writeFile(
-				`${assetPath}/completedForm.json`,
-				JSON.stringify(completedForm),
-			);
-			await fs.writeFile(
-				`${assetPath}/${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-cover-letter.txt`,
-				completedForm.coverLetter,
-				{ encoding: "utf-8" },
-			);
-		}
-
-		const result = {
+		// Complete form with interactive clarifications
+		const completedForm = await formCompleter({
 			sessionId,
-			companyName,
 			applicationDetails,
-			adjustedResume,
-			latexResume,
-			latexPdf: Buffer.from(latexPdf),
-			// screenshot: Buffer.from(screenshot, "base64"),
-			// formUrl,
-			assetPath,
-			completedForm,
-		};
+			resume: ogResumeMd,
+			personalMetadata,
+			context: mdContent.map((md) => md.markdown),
+		});
+
+		await updateSession(userId, sessionId, {
+			answeredForm: completedForm,
+			coverLetter: completedForm?.coverLetter,
+		});
+
+		await fs.writeFile(
+			`${assetPath}/completedForm.json`,
+			JSON.stringify(completedForm),
+		);
+		await fs.writeFile(
+			`${assetPath}/${toKebabCase(applicationDetails.companyInfo.name.toLowerCase())}-cover-letter.txt`,
+			completedForm.coverLetter,
+			{ encoding: "utf-8" },
+		);
+
 		await updateSession(userId, sessionId, {
 			status: "done",
 			currentStep: "ready_to_use",
 		});
-		return result;
 	} catch (error) {
-		// const errorMessage =
-		// 	error instanceof Error ? error.message : "Unknown error";
 		await updateSession(userId, sessionId, {
 			status: "failed",
 		});

@@ -285,6 +285,19 @@ export const jobPostingSchema = z.object({
 				.string()
 				.describe("The date the job was posted, in ISO 8601 format."),
 			// Add other relevant fields like application deadline, interview process, etc.
+			applicationDeadline: z
+				.string()
+				.describe("The date the application deadline is, in ISO 8601 format."),
+			linkedin: z
+				.object({
+					jobId: z.string().describe("The job id on LinkedIn."),
+					companyId: z.string().describe("The company id on LinkedIn."),
+					easyApply: z
+						.boolean()
+						.describe("Whether the job is an easy apply job on LinkedIn."),
+				})
+				.describe("LinkedIn specific job details"),
+			jobBoard: z.string().describe("The job board the job is posted on."),
 		})
 		.describe("Detailed information about the job posting itself."),
 

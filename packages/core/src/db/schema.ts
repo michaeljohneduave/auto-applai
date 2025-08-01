@@ -17,9 +17,17 @@ import type { SessionCost } from "../types";
 type RequestLog = ChatCompletionCreateParamsNonStreaming;
 type ResponseLog = ChatCompletion;
 
-const sessionStatus = ["processing", "done", "failed"] as const;
+const sessionStatus = [
+	"processing",
+	"done",
+	"failed",
+	"no-company-info",
+	"no-job-info",
+	"no-application-form",
+] as const;
 const steps = [
 	"scraping",
+	"extracting_info",
 	"agentic_scraping",
 	"generating_resume",
 	"generating_pdf",
@@ -27,6 +35,7 @@ const steps = [
 	"saving_assets",
 	"ready_to_use",
 ] as const;
+
 export const sessions = sqliteTable("sessions", {
 	id: t.text().primaryKey(),
 	userId: t.text("user_id").notNull(),
@@ -34,30 +43,41 @@ export const sessions = sqliteTable("sessions", {
 	companyName: t.text("company_name"),
 	url: t.text("url").notNull(),
 	status: t.text({ enum: sessionStatus }).default("processing"),
+	statusReason: t.text("status_reason"),
 	currentStep: t.text({ enum: steps }).default("scraping"),
 	generatedResumeUrl: t.text("generated_resume_url"),
 	generatedResumeLatex: t.text("generated_resume_latex"),
 	coverLetter: t.text("cover-letter"),
+	answeredForm: t
+		.text("answered_form", {
+			mode: "json",
+		})
+		.$type<z.infer<typeof formCompleterSchema> | null>(),
+	companyInfo: t
+		.text("company_info", {
+			mode: "json",
+		})
+		.$type<z.infer<typeof jobPostingSchema.shape.companyInfo> | null>(),
 	applicationForm: t
 		.text("application_form", {
 			mode: "json",
 		})
-		.$type<z.infer<typeof formCompleterSchema>>(),
-	applicationDetails: t
-		.text("application_details", {
+		.$type<z.infer<typeof jobPostingSchema.shape.applicationForm> | null>(),
+	jobInfo: t
+		.text("job_info", {
 			mode: "json",
 		})
-		.$type<z.infer<typeof jobPostingSchema>>(),
+		.$type<z.infer<typeof jobPostingSchema.shape.jobInfo> | null>(),
 	personalInfo: t
 		.text("personal_info", {
 			mode: "json",
 		})
-		.$type<z.infer<typeof personalInfoSchema>>(),
+		.$type<z.infer<typeof personalInfoSchema> | null>(),
 	cost: t
 		.text({
 			mode: "json",
 		})
-		.$type<SessionCost>(),
+		.$type<SessionCost | null>(),
 	assetPath: t.text("asset_path"),
 	createdAt: t
 		.integer({

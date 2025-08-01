@@ -282,11 +282,11 @@ export type GetSessionsResponse = Array<
 		logs: Logs[];
 	}
 >;
-export type GetSesssionsQueryString = z.infer<
+export type GetSessionsQueryString = z.infer<
 	typeof getSessionsSchema.querystring
 >;
 app.withTypeProvider<ZodTypeProvider>().route<{
-	Querystring: GetSesssionsQueryString;
+	Querystring: GetSessionsQueryString;
 	Reply: GetSessionsResponse;
 }>({
 	method: "GET",
@@ -319,9 +319,9 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	handler: async (req, reply) => {
 		const [session] = await db
 			.select({
-				applicationForm: sessions.applicationForm,
+				applicationForm: sessions.answeredForm,
 				personalInfo: sessions.personalInfo,
-				applicationDetails: sessions.applicationDetails,
+				companyInfo: sessions.companyInfo,
 				assetPath: sessions.assetPath,
 				status: sessions.status,
 			})
@@ -344,7 +344,7 @@ app.withTypeProvider<ZodTypeProvider>().route({
 			toKebabCase(
 				[
 					session.personalInfo?.fullName || "",
-					session.applicationDetails?.companyInfo.name.toLowerCase() || "",
+					session.companyInfo?.shortName.toLowerCase() || "",
 					"resume.pdf",
 				].join(" "),
 			),

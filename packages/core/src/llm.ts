@@ -356,7 +356,7 @@ ${JSON.stringify(this.getTools())}
 			await this.#logLlmCall(
 				completionParams,
 				completion,
-				(diff[0] * 1e9 + diff[1]) / 1e6,
+				(diff[0] * 1e9 + diff[1]) / 1e6, // Convert to milliseconds
 			);
 
 			if (choice.message.tool_calls) {
@@ -437,7 +437,7 @@ ${JSON.stringify(this.getTools())}
 			await this.#logLlmCall(
 				completionParams,
 				completion,
-				(diff[0] * 1e9 + diff[1]) / 1e6,
+				(diff[0] * 1e9 + diff[1]) / 1e6, // Convert to milliseconds
 			);
 
 			if (choice.finish_reason === "stop") {
@@ -524,7 +524,7 @@ ${JSON.stringify(this.getTools())}
 				await this.#logLlmCall(
 					completionParams,
 					response,
-					(diff[0] * 1e9 + diff[1]) / 1e6,
+					(diff[0] * 1e9 + diff[1]) / 1e6, // Convert to milliseconds
 				);
 
 				return response;

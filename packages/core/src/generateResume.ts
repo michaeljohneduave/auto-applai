@@ -124,7 +124,7 @@ export async function generateResume(
 		sessionId,
 	});
 
-	const MAX_ITERATIONS = 10;
+	const MAX_ITERATIONS = 5;
 	const TARGET_SCORE = 97;
 
 	const generatedResumes: string[] = [];
