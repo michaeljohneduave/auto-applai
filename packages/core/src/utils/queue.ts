@@ -4,6 +4,7 @@ interface Job {
 	userId: string;
 	jobUrl: string;
 	html?: string;
+	forceNew?: boolean;
 }
 
 class InMemoryQueue {

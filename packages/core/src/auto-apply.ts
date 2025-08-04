@@ -541,6 +541,7 @@ export async function runWithHtml(
 		}
 
 		const applicationDetails = await extractInfo(html, sessionId);
+
 		const setObj = {
 			personalInfo,
 		} as Partial<Sessions>;
@@ -587,7 +588,7 @@ export async function runWithHtml(
 
 		// If the session doesn't have an assetPath, its lacking the generated resume
 		// We only skip this if we encounter a html content for application form (no job+company details)
-		if (!assetPath && !applicationDetails.resumeNotes.length) {
+		if (!assetPath) {
 			const { adjustedResume, generatedEvals, generatedResumes } =
 				await generateResume(ogResumeMd, applicationDetails, sessionId);
 

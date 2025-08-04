@@ -225,6 +225,7 @@ const extensionScrapeSchema = {
 		html: z.string(),
 		url: z.string().url(),
 		userId: z.string().optional(),
+		forceNew: z.boolean().optional(),
 	}),
 };
 
@@ -259,6 +260,7 @@ app.withTypeProvider<ZodTypeProvider>().route({
 				jobUrl: req.body.url,
 				html: req.body.html,
 				userId: req.authSession?.userId!,
+				forceNew: req.body.forceNew,
 			});
 
 			reply.code(200).send({
@@ -345,6 +347,8 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 						eq(sessions.url, req.query.url),
 						eq(sessions.url, splitUrl.slice(0, -1).join("/")),
 					),
+					eq(sessions.status, "done"),
+					isNull(sessions.deletedAt),
 				),
 			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
 		});

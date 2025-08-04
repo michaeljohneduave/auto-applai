@@ -234,6 +234,54 @@ export const ExtensionInterface = () => {
 		}
 	};
 
+	const handleSendAsNew = async () => {
+		if (!selectedHtml) {
+			setStatus("No content extracted. Please scrape first.");
+			return;
+		}
+
+		setIsSending(true);
+		setStatus("Creating new session...");
+
+		try {
+			// Get current tab URL
+			const [tab] = await chrome.tabs.query({
+				active: true,
+				currentWindow: true,
+			});
+			const url = tab.url || currentUrl;
+
+			// Use background service worker to handle the API call with fresh token
+			chrome.runtime.sendMessage(
+				{
+					action: "extensionScrapeNew",
+					html: selectedHtml,
+					url: url,
+					userId: user?.id,
+				},
+				(response) => {
+					if (response.success) {
+						setStatus(`Success! ${response.data.message}`);
+						setSelectedHtml(null);
+						// Clear the stored HTML after successful send
+						chrome.runtime.sendMessage({ action: "clearSelectedHtml" });
+						// Reload session data after successful send
+						loadSessionData(url);
+					} else {
+						setStatus(`Error: ${response.error}`);
+					}
+					setIsSending(false);
+				},
+			);
+		} catch (error) {
+			console.error("Error sending content as new:", error);
+			setStatus(
+				`Error: ${error instanceof Error ? error.message : "Failed to send content. Please try again."}`,
+			);
+			setIsSending(false);
+		}
+	};
+
 	const handleClear = () => {
 		setSelectedHtml(null);
 		setStatus("Content cleared.");
@@ -400,6 +448,18 @@ ${selectedHtml}
 				>
 					{isSending ? "Sending..." : "Send"}
 				</button>
+
+				{/* Show Send as New button only when there's a completed session */}
+				{session && session.status === "done" && selectedHtml && (
+					<button
+						type="button"
+						onClick={handleSendAsNew}
+						disabled={!selectedHtml || isSending}
+						className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-px-4 plasmo-py-2 plasmo-bg-indigo-500 plasmo-text-white plasmo-rounded-lg plasmo-transition-all hover:plasmo-bg-indigo-600 disabled:plasmo-opacity-50 disabled:plasmo-cursor-not-allowed"
+					>
+						{isSending ? "Creating..." : "Send as New"}
+					</button>
+				)}
 
 				{selectedHtml && (
 					<div className="plasmo-flex plasmo-gap-2">

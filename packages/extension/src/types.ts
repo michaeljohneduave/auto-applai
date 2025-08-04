@@ -31,6 +31,7 @@ export interface BackgroundMessage extends BaseMessage {
 		| "getSelectedHtml"
 		| "getToken"
 		| "extensionScrape"
+		| "extensionScrapeNew"
 		| "getSessionByUrl"
 		| "downloadResume"
 		| "storeOriginalTab"

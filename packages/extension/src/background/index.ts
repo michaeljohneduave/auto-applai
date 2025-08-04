@@ -190,6 +190,52 @@ chrome.runtime.onMessage.addListener(
 			return true; // REQUIRED: Indicates that the listener responds asynchronously.
 		}
 
+		// Handle extension scrape new session requests
+		if (message.action === "extensionScrapeNew") {
+			getToken()
+				.then(async (token) => {
+					if (!token) {
+						sendResponse({ success: false, error: "No valid session token" });
+						return;
+					}
+
+					try {
+						const response = await fetch(
+							"http://localhost:5500/extension-scrape",
+							{
+								method: "POST",
+								headers: {
+									"Content-Type": "application/json",
+								},
+								body: JSON.stringify({
+									html: message.html,
+									url: message.url,
+									userId: message.userId,
+									forceNew: true,
+								}),
+							},
+						);
+
+						const result = await response.json();
+						sendResponse({ success: response.ok, data: result });
+					} catch (error) {
+						console.error("[Background service worker] API Error:", error);
+						sendResponse({
+							success: false,
+							error: "Failed to send request to API",
+						});
+					}
+				})
+				.catch((error) => {
+					console.error(
+						"[Background service worker] Error:",
+						JSON.stringify(error),
+					);
+					sendResponse({ success: false, error: "Failed to get token" });
+				});
+			return true; // REQUIRED: Indicates that the listener responds asynchronously.
+		}
+
 		// Handle session queries by URL
 		if (message.action === "getSessionByUrl") {
 			getToken()
