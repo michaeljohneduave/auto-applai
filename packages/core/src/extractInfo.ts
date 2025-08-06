@@ -80,7 +80,7 @@ Strictly follow the jobPostingSchema structure with all required fields.
 	const response = await llm.generateStructuredOutput({
 		temperature: 0.1,
 		reasoning_effort: "medium",
-		response_format: zodResponseFormat(jobPostingSchema, "job-info"),
+		response_format: zodResponseFormat(jobPostingSchema, "posting-info"),
 	});
 
 	if (!response.choices[0].message.parsed) {

@@ -160,7 +160,9 @@ export const jobPostingSchema = z.object({
 				})
 				.describe("An individual field within the application form."),
 		)
-		.describe("Details about the application form fields."),
+		.describe(
+			"Details about the application form fields. Explicity add the fields that are present in the form.",
+		),
 
 	companyInfo: z
 		.object({

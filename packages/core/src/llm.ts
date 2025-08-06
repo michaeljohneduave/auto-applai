@@ -552,6 +552,7 @@ ${JSON.stringify(this.getTools())}
 		duration: number,
 	) {
 		await db.insert(logs).values({
+			llmName: this.#name,
 			requestLog: request,
 			responseLog: response,
 			sessionId: this.#sessionId,
