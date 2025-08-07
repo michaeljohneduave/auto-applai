@@ -1,3 +1,4 @@
+import type { TransformedLogs } from "@auto-apply/api/src/log-transformer";
 import type {
 	GetAssetsResponse,
 	GetSessionsResponse,
@@ -28,8 +29,7 @@ export const useGeneratePdf = () => {
 
 export const useFetchSessions = () => {
 	const apiClient = useApiClient();
-	return (): Promise<GetSessionsResponse> =>
-		apiClient.get("/sessions?includeLogs=true");
+	return (): Promise<GetSessionsResponse> => apiClient.get("/sessions");
 };
 
 export const useFetchAssetContent = (id: string) => {
@@ -70,4 +70,10 @@ export const useUpdateSessionApplied = () => {
 export const useDeleteSession = () => {
 	const apiClient = useApiClient();
 	return (sessionId: string) => apiClient.delete(`/sessions/${sessionId}`);
+};
+
+export const useFetchSessionLogs = () => {
+	const apiClient = useApiClient();
+	return (sessionId: string): Promise<TransformedLogs> =>
+		apiClient.get(`/sessions/${sessionId}/logs`);
 };

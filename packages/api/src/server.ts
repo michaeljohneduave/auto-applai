@@ -26,6 +26,8 @@ import { toKebabCase } from "remeda";
 import { z } from "zod";
 import { db } from "./db.ts";
 import { eventBus } from "./events.ts";
+import { transformSessionLogs } from "./log-transformer";
+import { getModelPricing } from "./models-cache";
 
 declare module "fastify" {
 	export interface FastifyInstance {
@@ -281,14 +283,9 @@ const getSessionsSchema = {
 	querystring: z.object({
 		limit: z.number().optional().default(10),
 		skip: z.number().optional(),
-		includeLogs: z.enum(["true", "false"]).optional().default("false"),
 	}),
 };
-export type GetSessionsResponse = Array<
-	Sessions & {
-		logs?: Logs[];
-	}
->;
+export type GetSessionsResponse = Array<Sessions>;
 export type GetSessionsQueryString = z.infer<
 	typeof getSessionsSchema.querystring
 >;
@@ -308,9 +305,6 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 					isNull(sessions.deletedAt),
 				),
 			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
-			with: {
-				logs: req.query.includeLogs === "true" ? true : undefined,
-			},
 			limit: req.query.limit,
 		});
 
@@ -470,6 +464,48 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
+// Get transformed session logs
+const getSessionLogsSchema = {
+	params: z.object({
+		sessionId: z.string(),
+	}),
+};
+
+export type GetSessionLogsParams = z.infer<typeof getSessionLogsSchema.params>;
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/sessions/:sessionId/logs",
+	schema: getSessionLogsSchema,
+	preHandler: authHandler,
+	handler: async (req) => {
+		// Get the session to check ownership and current step
+		const session = await db.query.sessions.findFirst({
+			where: (sessions) =>
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.params.sessionId),
+					isNull(sessions.deletedAt),
+				),
+			with: {
+				logs: true,
+			},
+		});
+
+		if (!session) {
+			throw new Error("Session not found");
+		}
+
+		const transformedLogs = await transformSessionLogs(
+			session.logs,
+			req.params.sessionId,
+			session.currentStep || undefined,
+		);
+
+		return transformedLogs;
+	},
+});
+
 // Graceful shutdown handling
 async function gracefulShutdown() {
 	app.log.info("Shutting down gracefully...");
@@ -492,6 +528,14 @@ app
 	.then(async () => {
 		app.log.info(`Auto-Apply API Server listening on port ${PORT}`);
 		await checkRequiredServices();
+
+		// Initialize model pricing cache
+		try {
+			await getModelPricing();
+			app.log.info("Model pricing cache initialized");
+		} catch (error) {
+			app.log.error("Failed to initialize model pricing cache:", error);
+		}
 	})
 	.catch((err) => {
 		app.log.error(err);

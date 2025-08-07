@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useGeneratePdf, useMutateBaseAssets } from "../api";
 import { useUI } from "../contexts/UIContext";
 import ApplicationForm from "./ApplicationForm";
+import SessionLogsViewer from "./SessionLogsViewer";
 import { Button } from "./ui/button";
 import {
 	Dialog,
@@ -285,7 +286,7 @@ export default function AssetDisplayDialog() {
 							onClick={() => handleDownloadPdf(selected.content)}
 							variant="outline"
 							size="sm"
-							className="absolute top-2 right-2 z-10"
+							className="absolute top-2 right-2 z-10 cursor-pointer"
 						>
 							<Download className="w-4 h-4 mr-2" />
 							Download
@@ -304,6 +305,8 @@ export default function AssetDisplayDialog() {
 			}
 			case "json":
 				return <JsonView value={derivedContent} />;
+			case "logs":
+				return <SessionLogsViewer sessionId={selected.id} />;
 			default:
 				return <div>Unsupported format</div>;
 		}

@@ -119,10 +119,10 @@ export default function ApplicationList() {
 			case "logs":
 				setAsset({
 					id,
-					content: JSON.stringify(session.logs),
+					content: "", // We'll use the SessionLogsViewer component instead
 					name: "sessionLogs",
 					source: "list",
-					type: "json",
+					type: "logs", // New type for logs
 				});
 				break;
 		}

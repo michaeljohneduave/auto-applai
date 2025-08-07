@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext, useState } from "react";
 
-export type AssetType = "md" | "pdf" | "form" | "latex" | "json";
+export type AssetType = "md" | "pdf" | "form" | "latex" | "json" | "logs";
 
 export type SelectedItem = {
 	id: string;
