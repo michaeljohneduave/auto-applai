@@ -204,6 +204,10 @@ ${parsedResumeResponse.resume}
 `,
 		});
 
+		if (i === MAX_ITERATIONS) {
+			break;
+		}
+
 		console.log("Evaluating generated resume #", i);
 		evalLLM.addMessage({
 			role: "user",
