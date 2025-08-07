@@ -24,6 +24,7 @@ export const getStyle = (): HTMLStyleElement => {
 let isSelectionMode = false;
 let highlightedElement: HTMLElement | null = null;
 let originalStyles: { [key: string]: string } = {};
+let escapeHandler: ((e: KeyboardEvent) => void) | null = null;
 
 // Function to clean HTML by removing unnecessary elements
 const cleanHtml = (html: string): string => {
@@ -234,16 +235,16 @@ const enableElementSelection = () => {
 	document.addEventListener("click", handleElementClick);
 
 	// Add escape key listener
-	const handleEscape = (e: KeyboardEvent) => {
+	escapeHandler = (e: KeyboardEvent) => {
 		if (e.key === "Escape") {
-			disableElementSelection(); // This will send the cancellation message
+			disableElementSelection(true); // Send cancellation message only on escape
 		}
 	};
-	document.addEventListener("keydown", handleEscape);
+	document.addEventListener("keydown", escapeHandler);
 };
 
 // Function to disable element selection mode
-const disableElementSelection = (sendCancellationMessage = true) => {
+const disableElementSelection = (sendCancellationMessage: boolean) => {
 	isSelectionMode = false;
 	document.body.style.cursor = "";
 	clearHighlighting();
@@ -254,11 +255,10 @@ const disableElementSelection = (sendCancellationMessage = true) => {
 	document.removeEventListener("click", handleElementClick);
 
 	// Remove escape key listener
-	document.removeEventListener("keydown", (e) => {
-		if (e.key === "Escape") {
-			disableElementSelection();
-		}
-	});
+	if (escapeHandler) {
+		document.removeEventListener("keydown", escapeHandler);
+		escapeHandler = null;
+	}
 
 	// Send message to popup to update UI state only if requested
 	if (sendCancellationMessage) {
@@ -291,6 +291,36 @@ const handleMouseOut = (e: MouseEvent) => {
 	}
 };
 
+// Function to get element HTML with pseudo-element content included
+const getElementWithPseudoContent = (element: HTMLElement): string => {
+	// Clone the element to avoid modifying the original
+	const clone = element.cloneNode(true) as HTMLElement;
+
+	// Get computed styles for pseudo-elements
+	const beforeStyles = window.getComputedStyle(element, "::before");
+	const afterStyles = window.getComputedStyle(element, "::after");
+
+	// Add ::before content if it exists
+	if (beforeStyles.content && beforeStyles.content !== "none") {
+		const beforeContent = beforeStyles.content.replace(/['"]/g, "");
+		if (beforeContent.trim()) {
+			const beforeText = document.createTextNode(beforeContent);
+			clone.insertBefore(beforeText, clone.firstChild);
+		}
+	}
+
+	// Add ::after content if it exists
+	if (afterStyles.content && afterStyles.content !== "none") {
+		const afterContent = afterStyles.content.replace(/['"]/g, "");
+		if (afterContent.trim()) {
+			const afterText = document.createTextNode(afterContent);
+			clone.appendChild(afterText);
+		}
+	}
+
+	return clone.outerHTML;
+};
+
 // Click handler for element selection
 const handleElementClick = (e: MouseEvent) => {
 	if (!isSelectionMode) return;
@@ -300,7 +330,9 @@ const handleElementClick = (e: MouseEvent) => {
 
 	const target = e.target as HTMLElement;
 	if (target) {
-		const selectedHtml = cleanHtml(target.outerHTML);
+		// Get HTML with pseudo-element content included
+		const htmlWithPseudo = getElementWithPseudoContent(target);
+		const selectedHtml = cleanHtml(htmlWithPseudo);
 
 		// Send message to background script instead of popup
 		chrome.runtime.sendMessage({
@@ -309,7 +341,7 @@ const handleElementClick = (e: MouseEvent) => {
 			url: window.location.href,
 		});
 
-		disableElementSelection();
+		disableElementSelection(false); // Don't send cancellation message on element selection
 	}
 };
 
@@ -541,171 +573,107 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 		return;
 	}
 
+	if (
+		!sessionData.applicationForm ||
+		sessionData.applicationForm.length === 0
+	) {
+		console.log(
+			"No application form data available in session data - skipping form population",
+		);
+		chrome.runtime.sendMessage({
+			action: "formPopulationError",
+			error: "No application form data available - form population skipped",
+		});
+		return;
+	}
+
 	const formAnswers = sessionData.answeredForm.formAnswers;
+	const applicationForm = sessionData.applicationForm;
 	let populatedCount = 0;
-	let totalFields = 0;
+	const totalFields = applicationForm.length;
 
-	// Common form field selectors - more comprehensive based on applicationForm schema
-	const fieldSelectors = [
-		'input[type="text"]',
-		'input[type="email"]',
-		'input[type="tel"]',
-		'input[type="url"]',
-		'input[type="number"]',
-		'input[type="date"]',
-		"textarea",
-		"select",
-		'input[type="radio"]',
-		'input[type="checkbox"]',
-		'input[type="hidden"]', // Some forms use hidden fields
-	];
+	console.log(
+		`Found ${totalFields} form fields to populate from applicationForm data`,
+	);
 
-	// Get all form fields
-	const formFields = document.querySelectorAll(fieldSelectors.join(", "));
-	totalFields = formFields.length;
-
-	console.log(`Found ${totalFields} form fields to populate`);
-
-	// Create a mapping of common field names to answers
-	const fieldMapping: { [key: string]: string } = {};
-
+	// Create a mapping of questions to answers for quick lookup
+	const answerMap = new Map<string, string>();
 	formAnswers.forEach((answer) => {
-		const question = answer.question.toLowerCase();
-		const answerText = answer.answer;
-
-		// Map common question patterns to field names
-		if (question.includes("name") || question.includes("full name")) {
-			fieldMapping.name = answerText;
-			fieldMapping.full_name = answerText;
-			fieldMapping.first_name = answerText.split(" ")[0] || answerText;
-			fieldMapping.last_name = answerText.split(" ").slice(1).join(" ") || "";
-		} else if (question.includes("email")) {
-			fieldMapping.email = answerText;
-		} else if (question.includes("phone") || question.includes("tel")) {
-			fieldMapping.phone = answerText;
-			fieldMapping.telephone = answerText;
-		} else if (question.includes("address")) {
-			fieldMapping.address = answerText;
-		} else if (question.includes("city")) {
-			fieldMapping.city = answerText;
-		} else if (question.includes("state") || question.includes("province")) {
-			fieldMapping.state = answerText;
-		} else if (question.includes("zip") || question.includes("postal")) {
-			fieldMapping.zip = answerText;
-			fieldMapping.postal_code = answerText;
-		} else if (question.includes("country")) {
-			fieldMapping.country = answerText;
-		} else if (
-			question.includes("experience") ||
-			question.includes("work history")
-		) {
-			fieldMapping.experience = answerText;
-		} else if (question.includes("education") || question.includes("degree")) {
-			fieldMapping.education = answerText;
-		} else if (
-			question.includes("cover letter") ||
-			question.includes("motivation")
-		) {
-			fieldMapping.cover_letter = answerText;
-		} else {
-			// Store the original question-answer pair
-			fieldMapping[question.replace(/[^a-zA-Z0-9]/g, "_")] = answerText;
-		}
+		answerMap.set(answer.question.toLowerCase().trim(), answer.answer);
 	});
 
-	// Populate form fields
-	formFields.forEach((field: Element) => {
-		const input = field as
-			| HTMLInputElement
-			| HTMLTextAreaElement
-			| HTMLSelectElement;
-		const fieldName = input.name?.toLowerCase() || "";
-		const fieldId = input.id?.toLowerCase() || "";
-		const fieldPlaceholder =
-			"placeholder" in input ? input.placeholder?.toLowerCase() || "" : "";
-		const fieldLabel = getFieldLabel(input);
-
-		// Try to find a matching answer
-		let answerToUse = null;
-
-		// Check exact matches first
-		for (const [key, value] of Object.entries(fieldMapping)) {
-			if (
-				fieldName.includes(key) ||
-				fieldId.includes(key) ||
-				fieldPlaceholder.includes(key) ||
-				fieldLabel.includes(key)
-			) {
-				answerToUse = value;
-				break;
+	// Process each form field from the applicationForm data
+	for (const formField of applicationForm) {
+		try {
+			// Only populate required fields
+			if (!formField.required) {
+				console.log(`Skipping non-required field: ${formField.question}`);
+				continue;
 			}
-		}
 
-		// If no exact match, try partial matches
-		if (!answerToUse) {
-			for (const [key, value] of Object.entries(fieldMapping)) {
-				if (
-					key.includes(fieldName) ||
-					fieldName.includes(key) ||
-					key.includes(fieldId) ||
-					fieldId.includes(key)
-				) {
-					answerToUse = value;
-					break;
-				}
+			// Find the corresponding answer
+			const questionKey = formField.question.toLowerCase().trim();
+			const answer = answerMap.get(questionKey);
+
+			if (!answer) {
+				console.log(
+					`No answer found for required question: ${formField.question}`,
+				);
+				continue;
 			}
-		}
 
-		// Populate the field if we found a match
-		if (answerToUse) {
-			try {
-				if (input.type === "checkbox") {
-					(input as HTMLInputElement).checked =
-						answerToUse.toLowerCase().includes("yes") ||
-						answerToUse.toLowerCase().includes("true") ||
-						answerToUse.toLowerCase().includes("1");
-				} else if (input.type === "radio") {
-					// For radio buttons, we need to find the option that matches
-					const radioGroup = document.querySelectorAll(
-						`input[name="${input.name}"]`,
+			// Find the DOM element using the provided selectors
+			let element: Element | null = null;
+
+			// Try CSS selector first
+			if (formField.cssSelector) {
+				element = document.querySelector(formField.cssSelector);
+			}
+
+			// Try XPath selector if CSS selector didn't work
+			if (!element && formField.xPathSelector) {
+				try {
+					const result = document.evaluate(
+						formField.xPathSelector,
+						document,
+						null,
+						XPathResult.FIRST_ORDERED_NODE_TYPE,
+						null,
 					);
-					radioGroup.forEach((radio: Element) => {
-						const radioInput = radio as HTMLInputElement;
-						if (
-							radioInput.value
-								.toLowerCase()
-								.includes(answerToUse.toLowerCase()) ||
-							answerToUse.toLowerCase().includes(radioInput.value.toLowerCase())
-						) {
-							radioInput.checked = true;
-						}
-					});
-				} else if (input.tagName === "SELECT") {
-					// For select elements, try to find matching option
-					const select = input as HTMLSelectElement;
-					for (let i = 0; i < select.options.length; i++) {
-						const option = select.options[i];
-						if (
-							option.text.toLowerCase().includes(answerToUse.toLowerCase()) ||
-							answerToUse.toLowerCase().includes(option.text.toLowerCase())
-						) {
-							select.selectedIndex = i;
-							break;
-						}
-					}
-				} else {
-					// For text inputs and textareas
-					input.value = answerToUse;
-					// Trigger change event
-					input.dispatchEvent(new Event("input", { bubbles: true }));
-					input.dispatchEvent(new Event("change", { bubbles: true }));
+					element = result.singleNodeValue as Element;
+				} catch (error) {
+					console.error(
+						`Error evaluating XPath selector: ${formField.xPathSelector}`,
+						error,
+					);
 				}
-				populatedCount++;
-			} catch (error) {
-				console.error(`Error populating field ${fieldName}:`, error);
 			}
+
+			// Try ID if available
+			if (!element && formField.id) {
+				element = document.getElementById(formField.id);
+			}
+
+			// Try finding by name attribute
+			if (!element && formField.id) {
+				element = document.querySelector(`[name="${formField.id}"]`);
+			}
+
+			if (!element) {
+				console.log(`Could not find element for field: ${formField.question}`);
+				continue;
+			}
+
+			// Populate the field based on its type
+			const populated = populateFieldByType(element, formField, answer);
+			if (populated) {
+				populatedCount++;
+				console.log(`Successfully populated field: ${formField.question}`);
+			}
+		} catch (error) {
+			console.error(`Error populating field ${formField.question}:`, error);
 		}
-	});
+	}
 
 	// Auto-populate resume file inputs
 	const resumePopulatedCount = await populateResumeFields(sessionData);
@@ -728,13 +696,166 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 		totalFields,
 		populatedCount,
 		resumePopulatedCount,
-		fieldMapping: Object.keys(fieldMapping),
+		applicationFormFields: applicationForm.length,
+		formAnswersCount: formAnswers.length,
 		sessionData: {
 			hasAnsweredForm: !!sessionData.answeredForm,
-			formAnswersCount: sessionData.answeredForm?.formAnswers?.length || 0,
+			hasApplicationForm: !!sessionData.applicationForm,
 			hasResume: !!sessionData.assetPath,
 		},
 	});
+};
+
+// Function to populate a field based on its type
+const populateFieldByType = (
+	element: Element,
+	formField: any,
+	answer: string,
+): boolean => {
+	try {
+		const input = element as
+			| HTMLInputElement
+			| HTMLTextAreaElement
+			| HTMLSelectElement;
+
+		switch (formField.type) {
+			case "text":
+			case "email":
+			case "tel":
+			case "url":
+			case "number":
+			case "date":
+				if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {
+					input.value = answer;
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+					return true;
+				}
+				break;
+
+			case "textarea":
+				if (input.tagName === "TEXTAREA") {
+					input.value = answer;
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+					return true;
+				}
+				break;
+
+			case "select":
+				if (input.tagName === "SELECT") {
+					const select = input as HTMLSelectElement;
+					// Try to find matching option
+					for (let i = 0; i < select.options.length; i++) {
+						const option = select.options[i];
+						if (
+							option.text.toLowerCase().includes(answer.toLowerCase()) ||
+							answer.toLowerCase().includes(option.text.toLowerCase()) ||
+							option.value.toLowerCase().includes(answer.toLowerCase())
+						) {
+							select.selectedIndex = i;
+							select.dispatchEvent(new Event("change", { bubbles: true }));
+							return true;
+						}
+					}
+				}
+				break;
+
+			case "radio":
+				if (input.tagName === "INPUT" && input.type === "radio") {
+					// Find all radio buttons in the same group
+					const radioGroup = document.querySelectorAll(
+						`input[name="${input.name}"][type="radio"]`,
+					);
+					radioGroup.forEach((radio: Element) => {
+						const radioInput = radio as HTMLInputElement;
+						if (
+							radioInput.value.toLowerCase().includes(answer.toLowerCase()) ||
+							answer.toLowerCase().includes(radioInput.value.toLowerCase())
+						) {
+							radioInput.checked = true;
+							radioInput.dispatchEvent(new Event("change", { bubbles: true }));
+						}
+					});
+					return true;
+				}
+				break;
+
+			case "checkbox":
+				if (input.tagName === "INPUT" && input.type === "checkbox") {
+					const checkboxInput = input as HTMLInputElement;
+					const isChecked =
+						answer.toLowerCase().includes("yes") ||
+						answer.toLowerCase().includes("true") ||
+						answer.toLowerCase().includes("1") ||
+						answer.toLowerCase().includes("agree") ||
+						answer.toLowerCase().includes("accept");
+
+					checkboxInput.checked = isChecked;
+					checkboxInput.dispatchEvent(new Event("change", { bubbles: true }));
+					return true;
+				}
+				break;
+
+			case "multicheckbox": {
+				{
+					// For multiple checkboxes, we need to find all checkboxes in the group
+					// and check the ones that match the answer
+					const checkboxGroup = document.querySelectorAll(
+						`input[name="${input.name}"][type="checkbox"]`,
+					);
+					const answerParts = answer
+						.toLowerCase()
+						.split(/[,;]/)
+						.map((part) => part.trim());
+
+					checkboxGroup.forEach((checkbox: Element) => {
+						const checkboxInput = checkbox as HTMLInputElement;
+						const isChecked = answerParts.some(
+							(part) =>
+								checkboxInput.value.toLowerCase().includes(part) ||
+								part.includes(checkboxInput.value.toLowerCase()),
+						);
+
+						if (isChecked) {
+							checkboxInput.checked = true;
+							checkboxInput.dispatchEvent(
+								new Event("change", { bubbles: true }),
+							);
+						}
+					});
+					return true;
+				}
+			}
+
+			case "file":
+				// File inputs are handled separately in populateResumeFields
+				return false;
+
+			case "hidden":
+				if (input.tagName === "INPUT" && input.type === "hidden") {
+					input.value = answer;
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+					return true;
+				}
+				break;
+
+			default:
+				// Fallback for unknown types - try as text input
+				if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {
+					input.value = answer;
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+					return true;
+				}
+				break;
+		}
+
+		return false;
+	} catch (error) {
+		console.error(`Error populating field by type:`, error);
+		return false;
+	}
 };
 
 // Function to populate resume file inputs
@@ -946,7 +1067,7 @@ const getFieldLabel = (field: Element): string => {
 
 // Cleanup when popup closes
 window.addEventListener("beforeunload", () => {
-	disableElementSelection();
+	disableElementSelection(false); // Don't send cancellation message on page unload
 });
 
 const PlasmoOverlay = () => {
