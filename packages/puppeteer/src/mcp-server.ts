@@ -20,31 +20,31 @@ const mcpServer = new McpServer({
 mcpServer.prompt(
 	quickContentGrab.name,
 	quickContentGrab.schema,
-	quickContentGrab.execute
+	quickContentGrab.execute,
 );
 
 mcpServer.prompt(
 	clickAndExtractContent.name,
 	clickAndExtractContent.schema,
-	clickAndExtractContent.execute
+	clickAndExtractContent.execute,
 );
 
 mcpServer.prompt(
 	fetchFullHtml.name,
 	fetchFullHtml.schema,
-	fetchFullHtml.execute
+	fetchFullHtml.execute,
 );
 
 mcpServer.prompt(
 	summarizePageContent.name,
 	summarizePageContent.schema,
-	summarizePageContent.execute
+	summarizePageContent.execute,
 );
 
 mcpServer.prompt(
 	checkElementExists.name,
 	checkElementExists.schema,
-	checkElementExists.execute
+	checkElementExists.execute,
 );
 
 for (const tool of tools) {
@@ -79,7 +79,7 @@ const mcpRoutes: FastifyPluginCallback = (fastify, options) => {
 			transport = new SSEServerTransport(postMessagesPath, reply.raw);
 			transport.onclose = () => {
 				fastify.log.info(
-					`SSE: Transport closed for session ID: ${transport.sessionId}`
+					`SSE: Transport closed for session ID: ${transport.sessionId}`,
 				);
 				if (transport.sessionId) {
 					connections.delete(transport.sessionId);
@@ -89,13 +89,14 @@ const mcpRoutes: FastifyPluginCallback = (fastify, options) => {
 							.close()
 							.then(() => {
 								fastify.log.info(
-									`Closed browser context for session ID: ${transport.sessionId}`
+									`Closed browser context for session ID: ${transport.sessionId}`,
 								);
 							})
 							.catch((error) => {
 								fastify.log.error(
-									`Error closing browser context for session ID ${transport.sessionId}: ${error instanceof Error ? error.message : "Unknown error"
-									}`
+									`Error closing browser context for session ID ${transport.sessionId}: ${
+										error instanceof Error ? error.message : "Unknown error"
+									}`,
 								);
 							});
 					}

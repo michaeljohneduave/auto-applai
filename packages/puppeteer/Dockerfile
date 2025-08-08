@@ -4,6 +4,9 @@ FROM node:22.16-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Install pnpm globally
+RUN npm install -g pnpm
+
 # Install dependencies for Puppeteer (Chromium), Xvfb, PulseAudio, and FFmpeg
 # This is the most critical part. These are the libraries Chromium needs to run.
 RUN apt-get update && apt-get install -y \
@@ -52,18 +55,20 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy root package.json and pnpm-workspace.yaml
 COPY package.json ./
+COPY pnpm-workspace.yaml ./
 
-# Copy package.json and package-lock.json
-COPY puppeteer/package*.json ./puppeteer/
+# Copy package.json files for all workspaces
+COPY packages/puppeteer/package.json ./packages/puppeteer/
 
-# Install app dependencies
-RUN npm install
+# Install dependencies using pnpm
+RUN pnpm install
 
 # Bundle app source
-COPY puppeteer/src/ ./puppeteer/src/
+COPY packages/puppeteer/src/ ./packages/puppeteer/src/
 
-WORKDIR /app/puppeteer
+WORKDIR /app/packages/puppeteer
 
 # Expose the port the app runs on
 EXPOSE 80

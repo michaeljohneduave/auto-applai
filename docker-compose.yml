@@ -2,7 +2,7 @@ services:
   pandoc-latex:
     build:
       context: .
-      dockerfile: pandoc-latex/Dockerfile
+      dockerfile: ./packages/pandoc-latex/Dockerfile
     ports:
       - "4000:80"
     environment:
@@ -13,18 +13,18 @@ services:
     develop:
       watch:
       - action: sync+restart
-        path: ./puppeteer/src/
-        target: /app/puppeteer/src/
+        path: ./packages/puppeteer/src/
+        target: /app/packages/puppeteer/src/
         ignore:
           - node_modules/
     build:
       context: .
-      dockerfile: puppeteer/Dockerfile
+      dockerfile: packages/puppeteer/Dockerfile
     ports:
       - "3000:80"
     volumes:
-      - ./puppeteer/linux-chrome-profile:/app/puppeteer/linux-chrome-profile
-      - ./puppeteer/assets:/app/puppeteer/assets
+      - ./packages/puppeteer/linux-chrome-profile:/app/packages/puppeteer/linux-chrome-profile
+      - ./packages/puppeteer/assets:/app/packages/puppeteer/assets
     environment:
       - NODE_ENV=production
     restart: unless-stopped

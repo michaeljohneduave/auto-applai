@@ -9,34 +9,34 @@ WORKDIR /app
 # pandoc/latex is usually based on Debian/Ubuntu, so apt-get is available,
 # but Volta is also a valid method for managing Node versions.
 # We install bash as Volta script often assumes it exists
-RUN apt-get update && apt-get install -y --no-install-recommends bash curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends bash curl texlive-fonts-recommended texlive-latex-recommended texlive-latex-extra && rm -rf /var/lib/apt/lists/*
 RUN curl https://get.volta.sh | bash
 ENV VOLTA_HOME=/root/.volta
 ENV PATH="${VOLTA_HOME}/bin:${PATH}"
 RUN volta install node@22
 
+# Install pnpm globally
+RUN npm install -g pnpm
+
 # --- NEW: Install missing LaTeX packages ---
   RUN tlmgr update --self && \
   tlmgr install enumitem titlesec # Add any other missing packages here
 
-# --- Workspace Setup Inside Docker ---
-# Copy the root package.json (needed for npm to understand workspaces)
+# Copy root package.json and pnpm-workspace.yaml
 COPY package.json ./
+COPY pnpm-workspace.yaml ./
 
-# Copy the specific package.json for this workspace
-COPY pandoc-latex/package.json ./pandoc-latex/
+# Copy package.json files for all workspaces
+COPY packages/pandoc-latex/package.json ./packages/pandoc-latex/
 
-# Install dependencies using --workspace flag or just npm install
-# Running npm install from the root workdir will install all dependencies,
-# including the hoisted ones.
-RUN npm install
+# Install dependencies using pnpm
+RUN pnpm install
 
 # Copy source files that are part of this workspace
-COPY pandoc-latex/src ./pandoc-latex/src
+COPY packages/pandoc-latex/src ./packages/pandoc-latex/src
 
 # Set the working directory to the workspace directory inside the container
-WORKDIR /app/pandoc-latex
-# --- End Workspace Setup ---
+WORKDIR /app/packages/pandoc-latex
 
 # Expose the port your Fastify server will listen on (e.g., 3000)
 EXPOSE 80
