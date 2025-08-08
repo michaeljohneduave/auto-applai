@@ -1,7 +1,7 @@
 import { toXML } from "jstoxml";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { z } from "zod";
-import LLM, { GEMINI_25_PRO } from "./llm.ts";
+import LLM, { GEMINI_25_FLASH, GEMINI_25_PRO } from "./llm.ts";
 import {
 	adjustedResumeSchema,
 	type jobPostingSchema,
@@ -120,7 +120,7 @@ export async function generateResume(
 		sessionId,
 	});
 	const evalLLM = new LLM("resume-evaluator", {
-		model: GEMINI_25_PRO,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 

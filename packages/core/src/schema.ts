@@ -100,22 +100,79 @@ export const contentEvalSchema = z.object({
 });
 
 export const personalInfoSchema = z.object({
-	fullName: z.string(),
-	email: z.string().email(),
-	phoneNumber: z.string(),
-	address: z.object({
-		street: z.string(),
-		city: z.string(),
-		region: z.string(),
-		postalCode: z.string(),
-		country: z.string(),
-	}),
-	profiles: z.object({
-		linkedin: z.string().url(),
-		github: z.string().url(),
-		website: z.string().url(),
-	}),
-	timezones: z.array(z.string()),
+	fullName: z
+		.string()
+		.describe(
+			"The person's full name as it should appear on applications. May be missing if not provided.",
+		),
+	email: z
+		.string()
+		.email()
+		.describe(
+			"The person's primary email address for job applications. May be missing if not provided.",
+		),
+	phoneNumber: z
+		.string()
+		.describe(
+			"The person's phone number for contact purposes. May be missing if not provided.",
+		),
+	address: z
+		.object({
+			street: z
+				.string()
+				.describe(
+					"The street address including apartment/unit number if applicable. May be missing if not provided.",
+				),
+			city: z
+				.string()
+				.describe(
+					"The city or municipality where the person resides. May be missing if not provided.",
+				),
+			region: z
+				.string()
+				.describe(
+					"The state, province, or region where the person resides. May be missing if not provided.",
+				),
+			postalCode: z
+				.string()
+				.describe(
+					"The postal or ZIP code for the person's address. May be missing if not provided.",
+				),
+			country: z
+				.string()
+				.describe(
+					"The country where the person resides. May be missing if not provided.",
+				),
+		})
+		.describe(
+			"The person's complete residential address. May be missing if not provided.",
+		),
+	profiles: z
+		.object({
+			linkedin: z
+				.string()
+				.describe(
+					"The person's LinkedIn profile URL. May be missing if not provided.",
+				),
+			github: z
+				.string()
+				.describe(
+					"The person's GitHub profile URL. May be missing if not provided.",
+				),
+			website: z
+				.string()
+				.describe(
+					"The person's personal or professional website URL. May be missing if not provided.",
+				),
+		})
+		.describe(
+			"Professional online profiles and websites. May be missing if not provided.",
+		),
+	timezones: z
+		.array(z.string())
+		.describe(
+			"List of timezones the person is available in (e.g., 'America/New_York', 'Europe/London'). May be missing if not provided.",
+		),
 });
 
 export const jobPostingSchema = z.object({
