@@ -11,6 +11,5 @@
 	},
 	"scripts": {
 		"check": "biome check --reporter=summary"
-	},
-	"dependencies": {}
+	}
 }

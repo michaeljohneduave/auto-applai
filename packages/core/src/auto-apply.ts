@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import type { Interface } from "node:readline/promises";
 import { db } from "@auto-apply/api/src/db.ts";
 import { and, eq } from "drizzle-orm";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
@@ -545,7 +544,10 @@ export async function runWithHtml(
 		const setObj = {
 			personalInfo,
 		} as Partial<Sessions>;
-		if (applicationDetails.applicationForm && !session.applicationForm) {
+		if (
+			applicationDetails.applicationForm.length &&
+			!session.applicationForm?.length
+		) {
 			setObj.applicationForm = applicationDetails.applicationForm;
 		}
 

@@ -77,8 +77,12 @@ export async function htmlCrawler(pageUrl: string) {
 			if (!isSocialMediaOrEmail(url.toString())) {
 				validLinks.add(url.toString());
 			}
-		} catch (e) {
-			console.log(e.message, value);
+		} catch (e: unknown) {
+			if (e instanceof Error) {
+				console.log(e.message, value);
+			} else {
+				console.log(e, value);
+			}
 		}
 	}
 

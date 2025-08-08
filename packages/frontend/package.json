@@ -14,6 +14,7 @@
 	},
 	"dependencies": {
 		"@auto-apply/api": "workspace:*",
+		"@auto-apply/common": "workspace:*",
 		"@auto-apply/core": "workspace:*",
 		"@clerk/clerk-react": "^5.35.3",
 		"@codemirror/lang-markdown": "^6.3.3",
