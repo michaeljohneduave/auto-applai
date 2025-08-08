@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+	Banknote,
 	CheckCircle,
 	Clock,
-	DollarSign,
 	FileText,
 	Loader2,
 	Play,
@@ -72,10 +72,14 @@ export default function SessionLogsViewer({
 		return `${(ms / 60000).toFixed(1)} mins`;
 	};
 
-	const formatCost = (cost: number) => {
-		if (!cost) return "0¢";
+	const formatCost = (costInCents: number) => {
+		if (!costInCents) return "0¢";
 
-		const cents = cost.toPrecision(4);
+		if (costInCents >= 100) {
+			return `$${(costInCents / 100).toFixed(2)}`;
+		}
+
+		const cents = costInCents.toPrecision(4);
 		return `${cents.toLocaleString()}¢`;
 	};
 
@@ -127,8 +131,8 @@ export default function SessionLogsViewer({
 								<span>{formatDuration(logs.totalDuration)}</span>
 							</div>
 							<div className="flex items-center space-x-1">
-								<DollarSign className="h-4 w-4" />
-								<span>{formatCost(logs.totalCost)}</span>
+								<Banknote className="h-4 w-4" />
+								<span>{formatCost(logs.totalCost * 100)}</span>
 							</div>
 							<div className="flex items-center space-x-1">
 								<FileText className="h-4 w-4" />
@@ -155,7 +159,7 @@ export default function SessionLogsViewer({
 						</div>
 						<div>
 							<strong>Cost per Request:</strong>{" "}
-							{formatCost(logs.totalCost / logs.summary.totalRequests)}
+							{formatCost((logs.totalCost / logs.summary.totalRequests) * 100)}
 						</div>
 					</div>
 				</CardContent>
@@ -182,7 +186,7 @@ export default function SessionLogsViewer({
 												<> • {formatDuration(step.duration)}</>
 											) : null}
 											{step.totalCost > 0 ? (
-												<> • {formatCost(step.totalCost)}</>
+												<> • {formatCost(step.totalCost * 100)}</>
 											) : null}
 										</div>
 									</div>
@@ -213,7 +217,7 @@ export default function SessionLogsViewer({
 																<span>{model}</span>
 																<span>
 																	{usage.count} requests •{" "}
-																	{formatCost(usage.totalCost)} •{" "}
+																	{formatCost(usage.totalCost * 100)} •{" "}
 																	{usage.totalTokens.input +
 																		usage.totalTokens.output}{" "}
 																	tokens
@@ -244,7 +248,7 @@ export default function SessionLogsViewer({
 															<span>•</span>
 															<span>{formatDuration(log.duration)}</span>
 															<span>•</span>
-															<span>{formatCost(log.cost)}</span>
+															<span>{formatCost(log.cost * 100)}</span>
 															<span>•</span>
 															<span>
 																{log.tokens.input} → {log.tokens.output} tokens
