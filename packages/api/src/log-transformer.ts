@@ -18,6 +18,7 @@ export interface WorkflowStep {
 	totalTokens: {
 		input: number;
 		output: number;
+		cache: number;
 	};
 	modelUsage: {
 		[model: string]: {
@@ -26,6 +27,7 @@ export interface WorkflowStep {
 			totalTokens: {
 				input: number;
 				output: number;
+				cache: number;
 			};
 		};
 	};
@@ -40,6 +42,7 @@ export interface LogEntry {
 	tokens: {
 		input: number;
 		output: number;
+		cache: number;
 	};
 	requestPreview: string;
 	responsePreview: string;
@@ -55,6 +58,7 @@ export interface TransformedLogs {
 	totalTokens: {
 		input: number;
 		output: number;
+		cache: number;
 	};
 	summary: {
 		totalRequests: number;
@@ -144,6 +148,7 @@ export async function transformSessionLogs(
 	let totalDuration = 0;
 	let totalInputTokens = 0;
 	let totalOutputTokens = 0;
+	let totalCacheTokens = 0;
 
 	for (const step of WORKFLOW_STEPS) {
 		const stepLogsList = stepLogs[step.id] || [];
@@ -158,7 +163,7 @@ export async function transformSessionLogs(
 				startTime: 0,
 				logs: [],
 				totalCost: 0,
-				totalTokens: { input: 0, output: 0 },
+				totalTokens: { input: 0, output: 0, cache: 0 },
 				modelUsage: {},
 			});
 			continue;
@@ -174,35 +179,45 @@ export async function transformSessionLogs(
 		let stepCost = 0;
 		let stepInputTokens = 0;
 		let stepOutputTokens = 0;
+		let stepCacheTokens = 0;
 		const modelUsage: WorkflowStep["modelUsage"] = {};
 
 		const transformedLogs: LogEntry[] = stepLogsList.map((log) => {
 			const model = getModelFromRequest(log.requestLog);
-			const inputTokens = log.responseLog.usage?.prompt_tokens || 0;
+			const totalInputTokens = log.responseLog.usage?.prompt_tokens || 0;
 			const outputTokens = log.responseLog.usage?.completion_tokens || 0;
+			const cacheTokens =
+				log.responseLog.usage?.prompt_tokens_details?.cached_tokens || 0;
+
+			// Calculate non-cached input tokens to avoid double-counting for cost calculation
+			const nonCachedInputTokens = totalInputTokens - cacheTokens;
+
 			const cost = calculateTokenCost(
 				model,
-				inputTokens,
+				nonCachedInputTokens,
 				outputTokens,
+				cacheTokens,
 				pricing,
 			);
 
 			stepCost += cost;
-			stepInputTokens += inputTokens;
+			stepInputTokens += totalInputTokens; // Track total for display
 			stepOutputTokens += outputTokens;
+			stepCacheTokens += cacheTokens;
 
 			// Track model usage
 			if (!modelUsage[model]) {
 				modelUsage[model] = {
 					count: 0,
 					totalCost: 0,
-					totalTokens: { input: 0, output: 0 },
+					totalTokens: { input: 0, output: 0, cache: 0 },
 				};
 			}
 			modelUsage[model].count++;
 			modelUsage[model].totalCost += cost;
-			modelUsage[model].totalTokens.input += inputTokens;
+			modelUsage[model].totalTokens.input += totalInputTokens; // Track total for display
 			modelUsage[model].totalTokens.output += outputTokens;
+			modelUsage[model].totalTokens.cache += cacheTokens;
 
 			// Create previews
 			const requestContent = log.requestLog.messages?.[0]?.content;
@@ -222,7 +237,11 @@ export async function transformSessionLogs(
 				model,
 				duration: log.duration,
 				cost,
-				tokens: { input: inputTokens, output: outputTokens },
+				tokens: {
+					input: totalInputTokens, // Display total input tokens
+					output: outputTokens,
+					cache: cacheTokens,
+				},
 				requestPreview,
 				responsePreview,
 				fullRequest: log.requestLog,
@@ -250,7 +269,11 @@ export async function transformSessionLogs(
 			duration,
 			logs: transformedLogs,
 			totalCost: stepCost,
-			totalTokens: { input: stepInputTokens, output: stepOutputTokens },
+			totalTokens: {
+				input: stepInputTokens,
+				output: stepOutputTokens,
+				cache: stepCacheTokens,
+			},
 			modelUsage,
 		});
 
@@ -258,6 +281,7 @@ export async function transformSessionLogs(
 		totalDuration += duration;
 		totalInputTokens += stepInputTokens;
 		totalOutputTokens += stepOutputTokens;
+		totalCacheTokens += stepCacheTokens;
 	}
 
 	// Calculate summary statistics
@@ -278,7 +302,11 @@ export async function transformSessionLogs(
 		workflowSteps,
 		totalCost,
 		totalDuration,
-		totalTokens: { input: totalInputTokens, output: totalOutputTokens },
+		totalTokens: {
+			input: totalInputTokens,
+			output: totalOutputTokens,
+			cache: totalCacheTokens,
+		},
 		summary: {
 			totalRequests,
 			uniqueModels,

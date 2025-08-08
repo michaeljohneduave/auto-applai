@@ -73,8 +73,15 @@ export default function SessionLogsViewer({
 	};
 
 	const formatCost = (cost: number) => {
+		if (!cost) return "0¢";
+
 		const cents = cost.toPrecision(4);
 		return `${cents.toLocaleString()}¢`;
+	};
+
+	const formatTimestamp = (timestamp: number) => {
+		const date = new Date(timestamp);
+		return date.toLocaleTimeString();
 	};
 
 	const getStepStatusIcon = (status: string) => {
@@ -135,7 +142,8 @@ export default function SessionLogsViewer({
 						<div>
 							<strong>Total Tokens:</strong>{" "}
 							{logs.totalTokens.input.toLocaleString()} input,{" "}
-							{logs.totalTokens.output.toLocaleString()} output
+							{logs.totalTokens.output.toLocaleString()} output,{" "}
+							{logs.totalTokens.cache.toLocaleString()} cache
 						</div>
 						<div>
 							<strong>Average Duration:</strong>{" "}
@@ -205,7 +213,13 @@ export default function SessionLogsViewer({
 																<span>{model}</span>
 																<span>
 																	{usage.count} requests •{" "}
-																	{formatCost(usage.totalCost)}
+																	{formatCost(usage.totalCost)} •{" "}
+																	{usage.totalTokens.input +
+																		usage.totalTokens.output}{" "}
+																	tokens
+																	{usage.totalTokens.cache > 0 && (
+																		<> (cache: {usage.totalTokens.cache})</>
+																	)}
 																</span>
 															</div>
 														),
@@ -226,12 +240,17 @@ export default function SessionLogsViewer({
 															{log.model}
 														</div>
 														<div className="text-xs text-gray-500 space-x-2">
+															<span>{formatTimestamp(log.timestamp)}</span>
+															<span>•</span>
 															<span>{formatDuration(log.duration)}</span>
 															<span>•</span>
 															<span>{formatCost(log.cost)}</span>
 															<span>•</span>
 															<span>
 																{log.tokens.input} → {log.tokens.output} tokens
+																{log.tokens.cache > 0 && (
+																	<> (cache: {log.tokens.cache})</>
+																)}
 															</span>
 														</div>
 													</div>

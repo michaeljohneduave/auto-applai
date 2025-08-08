@@ -3,6 +3,8 @@ import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources.mj
 // Types reflecting a narrowed subset of https://models.dev/api.json
 interface ModelsDevModel {
 	cost?: {
+		cache_read?: number;
+		cache_write?: number;
 		input?: number;
 		output?: number;
 	};
@@ -24,6 +26,7 @@ interface ModelPricing {
 			cost: {
 				input: number;
 				output: number;
+				cache_read: number;
 			};
 			limit: {
 				context: number;
@@ -65,6 +68,7 @@ export async function getModelPricing(): Promise<ModelPricing> {
 				if (!model || typeof model !== "object") continue;
 				const costIn = model.cost?.input ?? 0;
 				const costOut = model.cost?.output ?? 0;
+				const costCacheRead = model.cost?.cache_read ?? 0;
 				const limitContext = model.limit?.context ?? 0;
 				const limitOutput = model.limit?.output ?? 0;
 
@@ -72,6 +76,7 @@ export async function getModelPricing(): Promise<ModelPricing> {
 					cost: {
 						input: costIn,
 						output: costOut,
+						cache_read: costCacheRead,
 					},
 					limit: {
 						context: limitContext,
@@ -106,6 +111,7 @@ export function calculateTokenCost(
 	modelName: string,
 	inputTokens: number,
 	outputTokens: number,
+	cacheTokens: number,
 	pricing: ModelPricing,
 ): number {
 	// Try to find the model in the pricing data
@@ -116,9 +122,11 @@ export function calculateTokenCost(
 				modelName.toLowerCase().includes(modelId.toLowerCase()) ||
 				modelId.toLowerCase().includes(modelName.toLowerCase())
 			) {
-				const inputCost = (inputTokens / 1000) * modelData.cost.input;
-				const outputCost = (outputTokens / 1000) * modelData.cost.output;
-				return inputCost + outputCost;
+				const inputCost = (inputTokens / 1_000_000) * modelData.cost.input;
+				const outputCost = (outputTokens / 1_000_000) * modelData.cost.output;
+				const cacheReadCost =
+					(cacheTokens / 1_000_000) * modelData.cost.cache_read;
+				return inputCost + outputCost + cacheReadCost;
 			}
 		}
 	}

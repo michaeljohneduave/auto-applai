@@ -89,11 +89,13 @@ export type SessionCost = {
 	totalCost: number;
 	inputTokens: number;
 	outputTokens: number;
+	cacheTokens: number;
 	perModel: Record<
 		string,
 		{
 			inputTokens: number;
 			outputTokens: number;
+			cacheTokens: number;
 			cost: number;
 		}
 	>;
