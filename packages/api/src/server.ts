@@ -14,14 +14,14 @@ import { generatePdf } from "./utils.ts";
 import "./worker.ts";
 import path from "node:path";
 import {
-	type Logs,
+	jobStatus,
 	type Sessions,
 	sessions,
 	type Users,
 	users,
 } from "@auto-apply/core/src/db/schema";
 import { queue } from "@auto-apply/core/src/utils/queue.ts";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { toKebabCase } from "remeda";
 import { z } from "zod";
 import { db } from "./db.ts";
@@ -152,15 +152,10 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	schema: putAssetsSchema,
 	preHandler: authHandler,
 	handler: async (req, reply) => {
-		const [response] = await db
+		await db
 			.update(users)
 			.set(req.body)
-			.where(eq(users.userId, req.authSession.userId!))
-			.returning({
-				resumeMd: users.baseResumeMd,
-				resumeLatex: users.baseResumeLatex,
-				personalInfo: users.personalInfoMd,
-			});
+			.where(eq(users.userId, req.authSession.userId!));
 
 		// if (req.body.baseResumeLatex) {
 		// 	const blob = await generatePdf(response.resumeLatex);
@@ -281,8 +276,8 @@ app.withTypeProvider<ZodTypeProvider>().route({
 
 const getSessionsSchema = {
 	querystring: z.object({
-		limit: z.number().optional().default(10),
-		skip: z.number().optional(),
+		limit: z.coerce.number().optional().default(25),
+		skip: z.coerce.number().optional().default(0),
 	}),
 };
 export type GetSessionsResponse = Array<Sessions>;
@@ -306,9 +301,32 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 				),
 			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
 			limit: req.query.limit,
+			offset: req.query.skip,
 		});
 
 		return response;
+	},
+});
+
+// Count sessions endpoint for pagination
+app.withTypeProvider<ZodTypeProvider>().route<{
+	Reply: { count: number };
+}>({
+	method: "GET",
+	url: "/sessions/count",
+	preHandler: authHandler,
+	handler: async (req) => {
+		const result = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(sessions)
+			.where(
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					isNull(sessions.deletedAt),
+				),
+			);
+
+		return { count: result[0]?.count ?? 0 };
 	},
 });
 
@@ -341,7 +359,7 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 						eq(sessions.url, req.query.url),
 						eq(sessions.url, splitUrl.slice(0, -1).join("/")),
 					),
-					eq(sessions.status, "done"),
+					eq(sessions.sessionStatus, "done"),
 					isNull(sessions.deletedAt),
 				),
 			orderBy: (sessions, { desc }) => [desc(sessions.createdAt)],
@@ -368,7 +386,7 @@ app.withTypeProvider<ZodTypeProvider>().route({
 				personalInfo: sessions.personalInfo,
 				companyInfo: sessions.companyInfo,
 				assetPath: sessions.assetPath,
-				status: sessions.status,
+				status: sessions.sessionStatus,
 			})
 			.from(sessions)
 			.where(
@@ -402,30 +420,30 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
-const putSessionAppliedSchema = {
+const putSessionJobStatusSchema = {
 	body: z.object({
-		applied: z.boolean(),
+		jobStatus: z.enum(jobStatus),
 	}),
 	params: z.object({
 		sessionId: z.string(),
 	}),
 };
-export type PutSessionAppliedBody = z.infer<
-	typeof putSessionAppliedSchema.body
+export type PutSessionJobStatusBody = z.infer<
+	typeof putSessionJobStatusSchema.body
 >;
-export type PutSessionAppliedParams = z.infer<
-	typeof putSessionAppliedSchema.params
+export type PutSessionJobStatusParams = z.infer<
+	typeof putSessionJobStatusSchema.params
 >;
 
 app.withTypeProvider<ZodTypeProvider>().route({
 	method: "PUT",
-	url: "/sessions/:sessionId/applied",
-	schema: putSessionAppliedSchema,
+	url: "/sessions/:sessionId/job-status",
+	schema: putSessionJobStatusSchema,
 	preHandler: authHandler,
 	handler: async (req, reply) => {
 		await db
 			.update(sessions)
-			.set({ applied: req.body.applied })
+			.set({ jobStatus: req.body.jobStatus })
 			.where(
 				and(
 					eq(sessions.userId, req.authSession.userId!),

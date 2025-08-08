@@ -36,14 +36,20 @@ const steps = [
 	"ready_to_use",
 ] as const;
 
+export const jobStatus = ["in_progress", "applied", "not_applied"] as const;
+
 export const sessions = sqliteTable("sessions", {
 	id: t.text().primaryKey(),
 	userId: t.text("user_id").notNull(),
 	title: t.text("title"),
 	companyName: t.text("company_name"),
 	url: t.text("url").notNull(),
-	status: t.text({ enum: sessionStatus }).default("processing"),
-	statusReason: t.text("status_reason"),
+	sessionStatus: t
+		.text("session_status", { enum: sessionStatus })
+		.default("processing"),
+	sessionStatusReason: t.text("session_status_reason"),
+	jobStatus: t.text("job_status", { enum: jobStatus }).default("in_progress"),
+	jobStatusReason: t.text("job_status_reason"),
 	currentStep: t.text({ enum: steps }).default("scraping"),
 	generatedResumeUrl: t.text("generated_resume_url"),
 	generatedResumeLatex: t.text("generated_resume_latex"),
@@ -79,11 +85,6 @@ export const sessions = sqliteTable("sessions", {
 		})
 		.$type<SessionCost | null>(),
 	assetPath: t.text("asset_path"),
-	applied: t
-		.integer({
-			mode: "boolean",
-		})
-		.default(false),
 	createdAt: t
 		.integer({
 			mode: "number",

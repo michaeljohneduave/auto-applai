@@ -197,7 +197,7 @@ export default function AssetDisplayDialog() {
 		if (type === "md") {
 			extensions.push(markdown());
 		} else if (type === "latex") {
-			extensions.push(StreamLanguage.define(stex));
+			// extensions.push(StreamLanguage.define(stex));
 		}
 		return extensions;
 	};

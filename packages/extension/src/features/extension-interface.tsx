@@ -350,7 +350,7 @@ ${selectedHtml}
 	};
 
 	const handlePopulateForm = async () => {
-		if (!session || session.status !== "done") return;
+		if (!session || session.sessionStatus !== "done") return;
 
 		setIsPopulatingForm(true);
 		setStatus("Populating form fields...");
@@ -450,7 +450,7 @@ ${selectedHtml}
 				</button>
 
 				{/* Show Send as New button only when there's a completed session */}
-				{session && session.status === "done" && selectedHtml && (
+				{session && session.sessionStatus === "done" && selectedHtml && (
 					<button
 						type="button"
 						onClick={handleSendAsNew}
@@ -535,9 +535,9 @@ ${selectedHtml}
 						Session Status
 					</div>
 					<div
-						className={`plasmo-text-sm plasmo-mb-1 ${getStatusColor(session.status)}`}
+						className={`plasmo-text-sm plasmo-mb-1 ${getStatusColor(session.sessionStatus)}`}
 					>
-						{getStatusText(session.status)}
+						{getStatusText(session.sessionStatus)}
 					</div>
 					{session.companyName && (
 						<div className="plasmo-text-xs plasmo-text-gray-600 plasmo-mb-1 plasmo-truncate">
@@ -562,7 +562,7 @@ ${selectedHtml}
 			)}
 
 			{/* Assets Section - Only show if session is done */}
-			{session && session.status === "done" && (
+			{session && session.sessionStatus === "done" && (
 				<div className="plasmo-p-3 plasmo-bg-green-50 plasmo-border plasmo-border-green-200 plasmo-rounded-lg">
 					<div className="plasmo-text-sm plasmo-font-semibold plasmo-mb-2 plasmo-text-green-800">
 						Generated Assets
@@ -590,7 +590,7 @@ ${selectedHtml}
 			)}
 
 			{/* Form Population Section - Only show if session is done */}
-			{session && session.status === "done" && (
+			{session && session.sessionStatus === "done" && (
 				<div className="plasmo-p-3 plasmo-bg-purple-50 plasmo-border plasmo-border-purple-200 plasmo-rounded-lg">
 					<div className="plasmo-text-sm plasmo-font-semibold plasmo-mb-2 plasmo-text-purple-800">
 						Form Population

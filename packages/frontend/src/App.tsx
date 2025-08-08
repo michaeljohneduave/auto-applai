@@ -92,7 +92,7 @@ function App() {
 						</div>
 					)}
 					<div className="flex flex-1 justify-center overflow-hidden">
-						<aside className="w-[900px] overflow-auto p-4">
+						<aside className="w-[1000px] overflow-auto p-4">
 							<div className="flex flex-col gap-y-4">
 								<div className="flex flex-col gap-y-1">
 									<span>Enter URL:</span>

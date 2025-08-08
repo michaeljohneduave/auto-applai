@@ -492,7 +492,7 @@ export async function runWithUrl(
 			completedForm,
 		};
 		await updateSession(userId, sessionId, {
-			status: "done",
+			sessionStatus: "done",
 			currentStep: "ready_to_use",
 		});
 		return result;
@@ -500,7 +500,7 @@ export async function runWithUrl(
 		// const errorMessage =
 		// 	error instanceof Error ? error.message : "Unknown error";
 		await updateSession(userId, sessionId, {
-			status: "failed",
+			sessionStatus: "failed",
 		});
 		throw error;
 	}
@@ -578,7 +578,7 @@ export async function runWithHtml(
 
 		if (!(session.jobInfo && session.companyInfo)) {
 			await updateSession(userId, sessionId, {
-				status: "no-job-info",
+				sessionStatus: "no-job-info",
 			});
 
 			return;
@@ -619,7 +619,7 @@ export async function runWithHtml(
 			// Save assets
 			await updateSession(userId, sessionId, {
 				currentStep: "saving_assets",
-				status: "processing",
+				sessionStatus: "processing",
 			});
 
 			await saveAssets(
@@ -664,12 +664,12 @@ export async function runWithHtml(
 		);
 
 		await updateSession(userId, sessionId, {
-			status: "done",
+			sessionStatus: "done",
 			currentStep: "ready_to_use",
 		});
 	} catch (error) {
 		await updateSession(userId, sessionId, {
-			status: "failed",
+			sessionStatus: "failed",
 		});
 		throw error;
 	}

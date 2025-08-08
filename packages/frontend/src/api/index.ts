@@ -5,7 +5,7 @@ import type {
 	PostAssetsPdfBody,
 	PostSessionsBody,
 	PutAssetsBody,
-	PutSessionAppliedBody,
+	PutSessionJobStatusBody,
 } from "@auto-apply/api/src/server.ts";
 import { useApiClient } from "./client";
 
@@ -29,7 +29,21 @@ export const useGeneratePdf = () => {
 
 export const useFetchSessions = () => {
 	const apiClient = useApiClient();
-	return (): Promise<GetSessionsResponse> => apiClient.get("/sessions");
+	return (params?: {
+		limit?: number;
+		skip?: number;
+	}): Promise<GetSessionsResponse> => {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.append("limit", params.limit.toString());
+		if (params?.skip) searchParams.append("skip", params.skip.toString());
+		const query = searchParams.toString();
+		return apiClient.get(`/sessions${query ? `?${query}` : ""}`);
+	};
+};
+
+export const useFetchSessionsCount = () => {
+	const apiClient = useApiClient();
+	return (): Promise<{ count: number }> => apiClient.get("/sessions/count");
 };
 
 export const useFetchAssetContent = (id: string) => {
@@ -61,10 +75,10 @@ export const useUpdateAssetContent = (id: string) => {
 	};
 };
 
-export const useUpdateSessionApplied = () => {
+export const useUpdateJobStatus = () => {
 	const apiClient = useApiClient();
-	return (sessionId: string, body: PutSessionAppliedBody) =>
-		apiClient.put(`/sessions/${sessionId}/applied`, body);
+	return (sessionId: string, body: PutSessionJobStatusBody) =>
+		apiClient.put(`/sessions/${sessionId}/job-status`, body);
 };
 
 export const useDeleteSession = () => {
