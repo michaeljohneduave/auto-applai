@@ -1,0 +1,8 @@
+---
+description: Linting Rules
+globs:
+alwaysApply: true
+---
+
+Do not attempt to fix or edit lint warnings.
+Do not attempt to run the dev server or build

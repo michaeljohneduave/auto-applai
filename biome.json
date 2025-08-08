@@ -2,7 +2,13 @@
 	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
 	"files": {
 		"includes": [
-			"packages/**/*"
+			"packages/**/*",
+			"!packages/**/*/assets/**/*",
+			"!packages/**/.plasmo/**/*",
+			"!packages/**/dist/**/*",
+			"!packages/**/build/**/*",
+			"!packages/**/drizzle/meta/**/*",
+			"!packages/**/puppeteer/linux-chrome-profile"
 		]
 	},
 	"linter": {
