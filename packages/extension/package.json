@@ -12,6 +12,7 @@
 	},
 	"dependencies": {
 		"@auto-apply/api": "workspace:*",
+		"@auto-apply/common": "workspace:*",
 		"@clerk/chrome-extension": "^2.5.13",
 		"plasmo": "0.90.5",
 		"react": "18.2.0",
@@ -34,7 +35,8 @@
 			"cookies",
 			"storage",
 			"tabs",
-			"activeTab"
+			"activeTab",
+			"downloads"
 		],
 		"host_permissions": [
 			"$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",

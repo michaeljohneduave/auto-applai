@@ -494,6 +494,51 @@ const extractApplyButtons = (): string => {
 	return cleanHtml(buttons);
 };
 
+// Helper: mask potentially sensitive values for logs
+const maskValueForLog = (label: string, value: string): string => {
+	try {
+		const lower = (label || "").toLowerCase();
+		const v = value ?? "";
+		if (!v) return "";
+		const isEmail = /email/.test(lower) || /@/.test(v);
+		const isPhone =
+			/phone|mobile|cell/.test(lower) || /\d{3}[- )]?\d{3}[- ]?\d{4}/.test(v);
+		const isAddress = /address/.test(lower);
+		if (isEmail) {
+			const [user, domain] = v.split("@");
+			if (!domain) return "***@***";
+			const u = user?.slice(0, 2) ?? "";
+			const d = domain.replace(/[^.]/g, "*");
+			return `${u}***@${d}`;
+		}
+		if (isPhone) {
+			return `***-***-${v.slice(-4)}`;
+		}
+		if (isAddress) {
+			return `${v.slice(0, 4)}***`;
+		}
+		if (v.length > 24) {
+			return `${v.slice(0, 8)}...(${v.length} chars)`;
+		}
+		return v;
+	} catch {
+		return "(unavailable)";
+	}
+};
+
+// Helper: summarize element for logs
+const summarizeElement = (el: Element | null): Record<string, string> => {
+	if (!el) return { tag: "", id: "", name: "", type: "", classes: "" };
+	const input = el as HTMLInputElement;
+	return {
+		tag: el.tagName,
+		id: (el as HTMLElement).id || "",
+		name: (el as HTMLElement).getAttribute("name") || "",
+		type: (input as any).type || "",
+		classes: (el as HTMLElement).className || "",
+	};
+};
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener(
 	async (message: JobPageMessage, _sender, sendResponse) => {
@@ -605,9 +650,24 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 	// Process each form field from the applicationForm data
 	for (const formField of applicationForm) {
 		try {
+			console.groupCollapsed(
+				`%c[AutoApply] Populate Field: %c${formField.question}`,
+				"color:#64748b;",
+				"color:#111827;font-weight:600;",
+			);
+			console.log("meta", {
+				required: !!formField.required,
+				type: formField.type,
+				selectors: {
+					css: formField.cssSelector || null,
+					xPath: formField.xPathSelector || null,
+					id: formField.id || null,
+				},
+			});
 			// Only populate required fields
 			if (!formField.required) {
-				console.log(`Skipping non-required field: ${formField.question}`);
+				console.log("skip", "non-required");
+				console.groupEnd();
 				continue;
 			}
 
@@ -616,9 +676,8 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 			const answer = answerMap.get(questionKey);
 
 			if (!answer) {
-				console.log(
-					`No answer found for required question: ${formField.question}`,
-				);
+				console.log("skip", "no-answer");
+				console.groupEnd();
 				continue;
 			}
 
@@ -628,6 +687,11 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 			// Try CSS selector first
 			if (formField.cssSelector) {
 				element = document.querySelector(formField.cssSelector);
+				console.log(
+					"query css",
+					formField.cssSelector,
+					summarizeElement(element),
+				);
 			}
 
 			// Try XPath selector if CSS selector didn't work
@@ -641,6 +705,11 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 						null,
 					);
 					element = result.singleNodeValue as Element;
+					console.log(
+						"query xpath",
+						formField.xPathSelector,
+						summarizeElement(element),
+					);
 				} catch (error) {
 					console.error(
 						`Error evaluating XPath selector: ${formField.xPathSelector}`,
@@ -652,26 +721,38 @@ const populateFormFields = async (sessionData: GetSessionsResponse[number]) => {
 			// Try ID if available
 			if (!element && formField.id) {
 				element = document.getElementById(formField.id);
+				console.log("query id", formField.id, summarizeElement(element));
 			}
 
 			// Try finding by name attribute
 			if (!element && formField.id) {
 				element = document.querySelector(`[name="${formField.id}"]`);
+				console.log("query name", formField.id, summarizeElement(element));
 			}
 
 			if (!element) {
-				console.log(`Could not find element for field: ${formField.question}`);
+				console.log("fail", "element-not-found");
+				console.groupEnd();
 				continue;
 			}
 
 			// Populate the field based on its type
+			const masked = maskValueForLog(formField.question, answer);
+			console.log("attempt", {
+				element: summarizeElement(element),
+				value: masked,
+			});
 			const populated = populateFieldByType(element, formField, answer);
 			if (populated) {
 				populatedCount++;
-				console.log(`Successfully populated field: ${formField.question}`);
+				console.log("result", "success");
+			} else {
+				console.log("result", "no-op");
 			}
+			console.groupEnd();
 		} catch (error) {
 			console.error(`Error populating field ${formField.question}:`, error);
+			console.groupEnd();
 		}
 	}
 
@@ -879,7 +960,11 @@ const populateResumeFields = async (
 	];
 
 	const fileInputs = document.querySelectorAll(resumeSelectors.join(", "));
-	console.log(`Found ${fileInputs.length} potential resume file inputs`);
+	console.groupCollapsed(
+		`%c[AutoApply] Resume Upload Detection`,
+		"color:#64748b;",
+	);
+	console.log("candidates", fileInputs.length);
 
 	for (const input of fileInputs) {
 		const fileInput = input as HTMLInputElement;
@@ -889,6 +974,7 @@ const populateResumeFields = async (
 
 		if (isResumeInput && sessionData.assetPath) {
 			try {
+				console.log("attempt", summarizeElement(fileInput));
 				// Create a file object from the resume data
 				const resumeFile = await createResumeFile(sessionData);
 				if (resumeFile) {
@@ -902,9 +988,7 @@ const populateResumeFields = async (
 					fileInput.dispatchEvent(new Event("input", { bubbles: true }));
 
 					populatedCount++;
-					console.log(
-						`Successfully populated resume file input: ${fileInput.name || fileInput.id}`,
-					);
+					console.log("result", "success");
 				}
 			} catch (error) {
 				console.error(`Error populating resume file input:`, error);
@@ -912,6 +996,7 @@ const populateResumeFields = async (
 		}
 	}
 
+	console.groupEnd();
 	return populatedCount;
 };
 

@@ -281,7 +281,7 @@ chrome.runtime.onMessage.addListener(
 		if (message.action === "downloadResume") {
 			getToken()
 				.then(async (token) => {
-					if (!token) {
+					if (!token || !message.sessionId) {
 						sendResponse({ success: false, error: "No valid session token" });
 						return;
 					}
@@ -298,23 +298,33 @@ chrome.runtime.onMessage.addListener(
 						);
 
 						if (response.ok) {
-							const blob = await response.blob();
-							const url = URL.createObjectURL(blob);
+							// Use downloads API with a data URL because service workers have no DOM
+							const arrayBuffer = await response.arrayBuffer();
+							const uint8Array = new Uint8Array(arrayBuffer);
+							const chunkSize = 1024;
+							let binaryString = "";
+							for (let i = 0; i < uint8Array.length; i += chunkSize) {
+								const chunk = uint8Array.slice(
+									i,
+									Math.min(i + chunkSize, uint8Array.length),
+								);
+								for (let j = 0; j < chunk.length; j++) {
+									binaryString += String.fromCharCode(chunk[j]);
+								}
+							}
+							const base64 = btoa(binaryString);
+							const dataUrl = `data:application/pdf;base64,${base64}`;
 
-							// Create a download link and trigger download
-							const a = document.createElement("a");
-							a.href = url;
-							a.download = `resume-${message.sessionId}.pdf`;
-							document.body.appendChild(a);
-							a.click();
-							document.body.removeChild(a);
-							URL.revokeObjectURL(url);
+							await chrome.downloads.download({
+								url: dataUrl,
+								filename: `${message.fileName}.pdf`,
+							});
 
 							sendResponse({ success: true });
 						} else {
 							sendResponse({
 								success: false,
-								error: "Failed to download resume",
+								error: `Failed to download resume (status ${response.status})`,
 							});
 						}
 					} catch (error) {

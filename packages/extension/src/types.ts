@@ -46,4 +46,5 @@ export interface BackgroundMessage extends BaseMessage {
 	sessionId?: string;
 	html?: string;
 	url?: string;
+	fileName?: string;
 }

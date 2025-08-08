@@ -1,4 +1,5 @@
 import type { GetSessionsResponse } from "@auto-apply/api/src/server";
+import { getResumeFileName } from "@auto-apply/common/src/utils";
 import { useUser } from "@clerk/chrome-extension";
 import { useCallback, useEffect, useState } from "react";
 import type { ExtensionUIMessage } from "~types";
@@ -9,7 +10,6 @@ export const ExtensionInterface = () => {
 	const [isSending, setIsSending] = useState(false);
 	const [isSelecting, setIsSelecting] = useState(false);
 	const [isCopying, setIsCopying] = useState(false);
-	const [isPopulatingForm, setIsPopulatingForm] = useState(false);
 	const [selectedHtml, setSelectedHtml] = useState<string | null>(null);
 	const [currentUrl, setCurrentUrl] = useState<string>("");
 	const [status, setStatus] = useState<string>("");
@@ -18,6 +18,66 @@ export const ExtensionInterface = () => {
 	);
 	const [isLoadingSession, setIsLoadingSession] = useState(false);
 	const [showExtractedContent, setShowExtractedContent] = useState(false);
+	const [assetsStatus, setAssetsStatus] = useState({
+		form: {
+			status: "idle" as "idle" | "progress" | "success" | "error",
+			error: null as string | null,
+		},
+		cover: {
+			status: "idle" as "idle" | "progress" | "success" | "error",
+			error: null as string | null,
+		},
+		resume: {
+			status: "idle" as "idle" | "progress" | "success" | "error",
+			error: null as string | null,
+		},
+	});
+
+	// Auto-clear inline asset status messages after a short delay
+	useEffect(() => {
+		if (
+			assetsStatus.resume.status === "success" ||
+			assetsStatus.resume.status === "error"
+		) {
+			const timer = window.setTimeout(() => {
+				setAssetsStatus((prev) => ({
+					...prev,
+					resume: { status: "idle", error: null },
+				}));
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [assetsStatus.resume.status]);
+
+	useEffect(() => {
+		if (
+			assetsStatus.cover.status === "success" ||
+			assetsStatus.cover.status === "error"
+		) {
+			const timer = window.setTimeout(() => {
+				setAssetsStatus((prev) => ({
+					...prev,
+					cover: { status: "idle", error: null },
+				}));
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [assetsStatus.cover.status]);
+
+	useEffect(() => {
+		if (
+			assetsStatus.form.status === "success" ||
+			assetsStatus.form.status === "error"
+		) {
+			const timer = window.setTimeout(() => {
+				setAssetsStatus((prev) => ({
+					...prev,
+					form: { status: "idle", error: null },
+				}));
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [assetsStatus.form.status]);
 
 	// Load session data for a given URL
 	const loadSessionData = useCallback((url: string) => {
@@ -95,11 +155,15 @@ export const ExtensionInterface = () => {
 				setIsSelecting(false);
 				setStatus("Element selection cancelled (ESC pressed).");
 			} else if (message.action === "formPopulated") {
-				setIsPopulatingForm(false);
-				setStatus("Form populated successfully!");
+				setAssetsStatus((prev) => ({
+					...prev,
+					form: { status: "success", error: null },
+				}));
 			} else if (message.action === "formPopulationError") {
-				setIsPopulatingForm(false);
-				setStatus(`Error: ${message.error}`);
+				setAssetsStatus((prev) => ({
+					...prev,
+					form: { status: "error", error: message.error ?? "Unknown error" },
+				}));
 			}
 		};
 
@@ -330,30 +394,88 @@ ${selectedHtml}
 		if (!session) return;
 
 		try {
+			setAssetsStatus((prev) => ({
+				...prev,
+				resume: { status: "progress", error: null },
+			}));
 			chrome.runtime.sendMessage(
 				{
 					action: "downloadResume",
 					sessionId: session.id,
+					fileName: getResumeFileName(
+						session.personalInfo?.fullName ?? "",
+						session.companyInfo?.shortName ?? "",
+						session.jobInfo?.shortTitle ?? "",
+					),
 				},
 				(response) => {
 					if (response.success) {
-						setStatus("Resume downloaded successfully!");
+						setAssetsStatus((prev) => ({
+							...prev,
+							resume: { status: "success", error: null },
+						}));
 					} else {
-						setStatus(`Error: ${response.error}`);
+						setAssetsStatus((prev) => ({
+							...prev,
+							resume: {
+								status: "error",
+								error: response.error ?? "Unknown error",
+							},
+						}));
 					}
 				},
 			);
 		} catch (error) {
 			console.error("Error downloading resume:", error);
-			setStatus("Error: Failed to download resume.");
+			setAssetsStatus((prev) => ({
+				...prev,
+				resume: { status: "error", error: "Failed to download resume." },
+			}));
+		}
+	};
+
+	const handleCopyCoverLetter = async () => {
+		if (!session || !session.coverLetter) {
+			setAssetsStatus((prev) => ({
+				...prev,
+				cover: { status: "error", error: "No cover letter available to copy." },
+			}));
+			return;
+		}
+
+		try {
+			setAssetsStatus((prev) => ({
+				...prev,
+				cover: { status: "progress", error: null },
+			}));
+			await navigator.clipboard.writeText(session.coverLetter);
+			setAssetsStatus((prev) => ({
+				...prev,
+				cover: { status: "success", error: null },
+			}));
+		} catch (error) {
+			console.error("Error copying cover letter:", error);
+			setAssetsStatus((prev) => ({
+				...prev,
+				cover: {
+					status: "error",
+					error:
+						error instanceof Error
+							? error.message
+							: "Failed to copy cover letter.",
+				},
+			}));
 		}
 	};
 
 	const handlePopulateForm = async () => {
 		if (!session || session.sessionStatus !== "done") return;
 
-		setIsPopulatingForm(true);
-		setStatus("Populating form fields...");
+		// set local assets status to progress
+		setAssetsStatus((prev) => ({
+			...prev,
+			form: { status: "progress", error: null },
+		}));
 
 		try {
 			const [tab] = await chrome.tabs.query({
@@ -368,8 +490,16 @@ ${selectedHtml}
 			}
 		} catch (error) {
 			console.error("Error populating form:", error);
-			setStatus("Error: Could not populate form. Please try again.");
-			setIsPopulatingForm(false);
+			setAssetsStatus((prev) => ({
+				...prev,
+				form: {
+					status: "error",
+					error:
+						error instanceof Error
+							? error.message
+							: "Could not populate form. Please try again.",
+				},
+			}));
 		}
 	};
 
@@ -510,7 +640,7 @@ ${selectedHtml}
 					</div>
 				)}
 
-				{status && (
+				{status && status !== "Form populated successfully!" && (
 					<div className="plasmo-p-3 plasmo-bg-blue-50 plasmo-border plasmo-border-blue-200 plasmo-rounded-lg">
 						<div className="plasmo-text-sm plasmo-text-blue-800 plasmo-break-words">
 							{status}
@@ -563,46 +693,73 @@ ${selectedHtml}
 
 			{/* Assets Section - Only show if session is done */}
 			{session && session.sessionStatus === "done" && (
-				<div className="plasmo-p-3 plasmo-bg-green-50 plasmo-border plasmo-border-green-200 plasmo-rounded-lg">
-					<div className="plasmo-text-sm plasmo-font-semibold plasmo-mb-2 plasmo-text-green-800">
+				<div className="plasmo-p-3 plasmo-bg-gray-50 plasmo-border plasmo-border-gray-200 plasmo-rounded-lg">
+					<div className="plasmo-text-sm plasmo-font-semibold plasmo-mb-2">
 						Generated Assets
 					</div>
 					<div className="plasmo-flex plasmo-flex-col plasmo-gap-2">
+						<div className="plasmo-flex plasmo-flex-col plasmo-gap-2">
+							<button
+								type="button"
+								onClick={handleDownloadResume}
+								className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-px-3 plasmo-py-2 plasmo-bg-green-500 plasmo-text-white plasmo-rounded-lg plasmo-transition-all hover:plasmo-bg-green-600 plasmo-text-sm"
+							>
+								{assetsStatus.resume.status === "progress"
+									? "Downloading..."
+									: "📄 Download Resume"}
+							</button>
+							{assetsStatus.resume.status === "success" && (
+								<div className="plasmo-mt-2 plasmo-text-xs plasmo-font-medium plasmo-text-green-700 plasmo-bg-green-50 plasmo-border plasmo-border-green-200 plasmo-rounded-md plasmo-px-2 plasmo-py-1">
+									Resume downloaded successfully!
+								</div>
+							)}
+							{assetsStatus.resume.status === "error" && (
+								<div className="plasmo-mt-2 plasmo-text-xs plasmo-font-medium plasmo-text-red-700 plasmo-bg-red-50 plasmo-border plasmo-border-red-200 plasmo-rounded-md plasmo-px-2 plasmo-py-1">
+									Error: {assetsStatus.resume.error}
+								</div>
+							)}
+							<button
+								type="button"
+								onClick={handleCopyCoverLetter}
+								disabled={assetsStatus.cover.status === "progress"}
+								className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-px-3 plasmo-py-2 plasmo-bg-blue-500 plasmo-text-white plasmo-rounded-lg plasmo-transition-all hover:plasmo-bg-blue-600 disabled:plasmo-opacity-50 disabled:plasmo-cursor-not-allowed plasmo-text-sm"
+							>
+								{assetsStatus.cover.status === "progress"
+									? "Copying..."
+									: "📋 Copy Cover Letter"}
+							</button>
+							{assetsStatus.cover.status === "success" && (
+								<div className="plasmo-mt-2 plasmo-text-xs plasmo-font-medium plasmo-text-green-700 plasmo-bg-green-50 plasmo-border plasmo-border-green-200 plasmo-rounded-md plasmo-px-2 plasmo-py-1">
+									Cover letter copied to clipboard.
+								</div>
+							)}
+							{assetsStatus.cover.status === "error" && (
+								<div className="plasmo-mt-2 plasmo-text-xs plasmo-font-medium plasmo-text-red-700 plasmo-bg-red-50 plasmo-border plasmo-border-red-200 plasmo-rounded-md plasmo-px-2 plasmo-py-1">
+									Error: {assetsStatus.cover.error}
+								</div>
+							)}
+						</div>
 						<button
 							type="button"
-							onClick={handleDownloadResume}
-							className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-px-3 plasmo-py-2 plasmo-bg-green-500 plasmo-text-white plasmo-rounded-lg plasmo-transition-all hover:plasmo-bg-green-600 plasmo-text-sm"
+							onClick={handlePopulateForm}
+							disabled={assetsStatus.form.status === "progress"}
+							className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-px-3 plasmo-py-2 plasmo-bg-purple-500 plasmo-text-white plasmo-rounded-lg plasmo-transition-all hover:plasmo-bg-purple-600 disabled:plasmo-opacity-50 disabled:plasmo-cursor-not-allowed plasmo-text-sm"
 						>
-							📄 Download Resume
+							{assetsStatus.form.status === "progress"
+								? "Populating..."
+								: "Auto-Populate Form"}
 						</button>
-						{session.coverLetter && (
-							<div className="plasmo-p-2 plasmo-bg-blue-50 plasmo-border plasmo-border-blue-200 plasmo-rounded-lg">
-								<div className="plasmo-text-xs plasmo-font-semibold plasmo-text-blue-800 plasmo-mb-1">
-									Cover Letter:
-								</div>
-								<div className="plasmo-text-xs plasmo-text-blue-700 plasmo-line-clamp-3">
-									{session.coverLetter.substring(0, 200)}...
-								</div>
+						{assetsStatus.form.status === "success" && (
+							<div className="plasmo-mt-2 plasmo-text-xs plasmo-font-medium plasmo-text-green-700 plasmo-bg-green-50 plasmo-border plasmo-border-green-200 plasmo-rounded-md plasmo-px-2 plasmo-py-1">
+								Form populated successfully!
+							</div>
+						)}
+						{assetsStatus.form.status === "error" && (
+							<div className="plasmo-mt-2 plasmo-text-xs plasmo-font-medium plasmo-text-red-700 plasmo-bg-red-50 plasmo-border plasmo-border-red-200 plasmo-rounded-md plasmo-px-2 plasmo-py-1">
+								Error: {assetsStatus.form.error}
 							</div>
 						)}
 					</div>
-				</div>
-			)}
-
-			{/* Form Population Section - Only show if session is done */}
-			{session && session.sessionStatus === "done" && (
-				<div className="plasmo-p-3 plasmo-bg-purple-50 plasmo-border plasmo-border-purple-200 plasmo-rounded-lg">
-					<div className="plasmo-text-sm plasmo-font-semibold plasmo-mb-2 plasmo-text-purple-800">
-						Form Population
-					</div>
-					<button
-						type="button"
-						onClick={handlePopulateForm}
-						disabled={isPopulatingForm}
-						className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-px-4 plasmo-py-2 plasmo-bg-purple-500 plasmo-text-white plasmo-rounded-lg plasmo-transition-all hover:plasmo-bg-purple-600 disabled:plasmo-opacity-50 disabled:plasmo-cursor-not-allowed plasmo-w-full"
-					>
-						{isPopulatingForm ? "Populating..." : "Auto-Populate Form"}
-					</button>
 				</div>
 			)}
 		</div>

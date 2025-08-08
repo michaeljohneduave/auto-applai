@@ -1,4 +1,5 @@
 import type { GetSessionsResponse } from "@auto-apply/api/src/server.ts";
+import { getResumeFileName } from "@auto-apply/common/src/utils";
 import type { Sessions } from "@auto-apply/core/src/db/schema";
 import { rankItem } from "@tanstack/match-sorter-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -141,16 +142,10 @@ export default function ApplicationList() {
 					setAsset({
 						id,
 						content: btoa(binary),
-						name: R.toKebabCase(
-							[
-								session.personalInfo.fullName,
-								session.companyInfo?.shortName,
-								session.jobInfo?.shortTitle,
-								"resume",
-							]
-								.filter(Boolean)
-								.join(" ")
-								.replace(/[.,]/gi, ""),
+						name: getResumeFileName(
+							session.personalInfo?.fullName ?? "",
+							session.companyInfo?.shortName ?? "",
+							session.jobInfo?.shortTitle ?? "",
 						),
 						source: "list",
 						type: "pdf",
