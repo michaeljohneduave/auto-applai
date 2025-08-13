@@ -1,6 +1,5 @@
 import { hrtime } from "node:process";
 import { setTimeout } from "node:timers/promises";
-import { db } from "@auto-apply/api/src/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -17,6 +16,7 @@ import type {
 } from "openai/resources.mjs";
 import { randomString } from "remeda";
 import { z } from "zod";
+import { db } from "./db/db.ts";
 import { logs } from "./db/schema";
 
 interface MCPClientConfig {

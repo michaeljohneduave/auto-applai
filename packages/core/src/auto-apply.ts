@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import { db } from "@auto-apply/api/src/db.ts";
 import { and, eq } from "drizzle-orm";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
@@ -7,6 +6,7 @@ import { toKebabCase } from "remeda";
 import type { z } from "zod";
 import { llmFormCrawler } from "../src/crawler.ts";
 import { generateResume } from "../src/generateResume.ts";
+import { db } from "./db/db.ts";
 import { type Sessions, sessions, users } from "./db/schema.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";

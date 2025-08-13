@@ -24,7 +24,7 @@ import { queue } from "@auto-apply/core/src/utils/queue.ts";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { toKebabCase } from "remeda";
 import { z } from "zod";
-import { db } from "./db.ts";
+import { db } from "@auto-apply/core/src/db/db.ts";
 import { eventBus } from "./events.ts";
 import { transformSessionLogs } from "./log-transformer";
 import { getModelPricing } from "./models-cache";
