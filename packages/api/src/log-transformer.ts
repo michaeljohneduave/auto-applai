@@ -182,72 +182,74 @@ export async function transformSessionLogs(
 		let stepCacheTokens = 0;
 		const modelUsage: WorkflowStep["modelUsage"] = {};
 
-		const transformedLogs: LogEntry[] = stepLogsList.map((log) => {
-			const model = getModelFromRequest(log.requestLog);
-			const totalInputTokens = log.responseLog.usage?.prompt_tokens || 0;
-			const outputTokens = log.responseLog.usage?.completion_tokens || 0;
-			const cacheTokens =
-				log.responseLog.usage?.prompt_tokens_details?.cached_tokens || 0;
+		const transformedLogs: LogEntry[] = stepLogsList
+			.filter((log) => log.responseLog != null)
+			.map((log) => {
+				const model = getModelFromRequest(log.requestLog);
+				const totalInputTokens = log.responseLog?.usage?.prompt_tokens || 0;
+				const outputTokens = log.responseLog?.usage?.completion_tokens || 0;
+				const cacheTokens =
+					log.responseLog?.usage?.prompt_tokens_details?.cached_tokens || 0;
 
-			// Calculate non-cached input tokens to avoid double-counting for cost calculation
-			const nonCachedInputTokens = totalInputTokens - cacheTokens;
+				// Calculate non-cached input tokens to avoid double-counting for cost calculation
+				const nonCachedInputTokens = totalInputTokens - cacheTokens;
 
-			const cost = calculateTokenCost(
-				model,
-				nonCachedInputTokens,
-				outputTokens,
-				cacheTokens,
-				pricing,
-			);
+				const cost = calculateTokenCost(
+					model,
+					nonCachedInputTokens,
+					outputTokens,
+					cacheTokens,
+					pricing,
+				);
 
-			stepCost += cost;
-			stepInputTokens += totalInputTokens; // Track total for display
-			stepOutputTokens += outputTokens;
-			stepCacheTokens += cacheTokens;
+				stepCost += cost;
+				stepInputTokens += totalInputTokens; // Track total for display
+				stepOutputTokens += outputTokens;
+				stepCacheTokens += cacheTokens;
 
-			// Track model usage
-			if (!modelUsage[model]) {
-				modelUsage[model] = {
-					count: 0,
-					totalCost: 0,
-					totalTokens: { input: 0, output: 0, cache: 0 },
+				// Track model usage
+				if (!modelUsage[model]) {
+					modelUsage[model] = {
+						count: 0,
+						totalCost: 0,
+						totalTokens: { input: 0, output: 0, cache: 0 },
+					};
+				}
+				modelUsage[model].count++;
+				modelUsage[model].totalCost += cost;
+				modelUsage[model].totalTokens.input += totalInputTokens; // Track total for display
+				modelUsage[model].totalTokens.output += outputTokens;
+				modelUsage[model].totalTokens.cache += cacheTokens;
+
+				// Create previews
+				const requestContent = log.requestLog.messages?.[0]?.content;
+				const requestPreview =
+					typeof requestContent === "string"
+						? requestContent.substring(0, 100)
+						: "No content";
+				const responseContent = log.responseLog?.choices?.[0]?.message?.content;
+				const responsePreview =
+					typeof responseContent === "string"
+						? responseContent.substring(0, 100)
+						: "No content";
+
+				return {
+					id: log.id,
+					timestamp: log.createdAt || 0,
+					model,
+					duration: log.duration,
+					cost,
+					tokens: {
+						input: totalInputTokens, // Display total input tokens
+						output: outputTokens,
+						cache: cacheTokens,
+					},
+					requestPreview,
+					responsePreview,
+					fullRequest: log.requestLog,
+					fullResponse: log.responseLog,
 				};
-			}
-			modelUsage[model].count++;
-			modelUsage[model].totalCost += cost;
-			modelUsage[model].totalTokens.input += totalInputTokens; // Track total for display
-			modelUsage[model].totalTokens.output += outputTokens;
-			modelUsage[model].totalTokens.cache += cacheTokens;
-
-			// Create previews
-			const requestContent = log.requestLog.messages?.[0]?.content;
-			const requestPreview =
-				typeof requestContent === "string"
-					? requestContent.substring(0, 100)
-					: "No content";
-			const responseContent = log.responseLog.choices?.[0]?.message?.content;
-			const responsePreview =
-				typeof responseContent === "string"
-					? responseContent.substring(0, 100)
-					: "No content";
-
-			return {
-				id: log.id,
-				timestamp: log.createdAt || 0,
-				model,
-				duration: log.duration,
-				cost,
-				tokens: {
-					input: totalInputTokens, // Display total input tokens
-					output: outputTokens,
-					cache: cacheTokens,
-				},
-				requestPreview,
-				responsePreview,
-				fullRequest: log.requestLog,
-				fullResponse: log.responseLog,
-			};
-		});
+			});
 
 		// Determine step status
 		let status: WorkflowStep["status"] = "completed";
