@@ -119,8 +119,8 @@ export async function generateResume(
 	notes?: string,
 ) {
 	const resumeLLM = new LLM("resume-adjuster", {
-		// model: GEMINI_25_PRO,
-		model: GEMINI_25_FLASH,
+		model: GEMINI_25_PRO,
+		// model: GEMINI_25_FLASH,
 		sessionId,
 	});
 	const evalLLM = new LLM("resume-evaluator", {
@@ -181,7 +181,8 @@ export async function generateResume(
 				"adjusted-resume",
 			),
 			temperature: 0.2,
-			top_p: 0.9,
+			// top_p: 0.9,
+			reasoning_effort: "low",
 		});
 
 		if (!resumeResponse.choices[0].message.parsed) {

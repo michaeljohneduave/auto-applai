@@ -476,7 +476,7 @@ export default function ApplicationList() {
 					),
 				size: 180,
 				filterFn: fuzzyFilter,
-				enableGlobalFilter: true,
+				enableGlobalFilter: false,
 			},
 			{
 				id: "url",
@@ -652,7 +652,7 @@ export default function ApplicationList() {
 		filterFns: { fuzzy: fuzzyFilter },
 		globalFilterFn: fuzzyFilter,
 		columnResizeMode: "onChange",
-		enableColumnResizing: true,
+		enableColumnResizing: false,
 		defaultColumn: {
 			minSize: 60,
 			size: 150,
