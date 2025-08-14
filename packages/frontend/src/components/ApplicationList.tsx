@@ -9,7 +9,6 @@ import {
 	flexRender,
 	getCoreRowModel,
 	getFilteredRowModel,
-	getPaginationRowModel,
 	getSortedRowModel,
 	type PaginationState,
 	type SortingState,
@@ -34,9 +33,11 @@ import Papa from "papaparse";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as R from "remeda";
 import { formatSmartDate } from "@/lib/date";
+import { cn } from "@/lib/utils";
 import {
 	useDeleteSession,
 	useFetchSessions,
+	useFetchSessionsCount,
 	useRetrySession,
 	useUpdateJobStatus,
 	useUpdateSessionNotes,
@@ -63,6 +64,7 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 
 export default function ApplicationList() {
 	const fetchApplications = useFetchSessions();
+	const fetchSessionsCount = useFetchSessionsCount();
 
 	const updateJobStatus = useUpdateJobStatus();
 	const deleteSession = useDeleteSession();
@@ -90,6 +92,14 @@ export default function ApplicationList() {
 		queryKey: ["applications", prefs.pagination],
 		queryFn: fetchSessionsWithPagination,
 	});
+
+	const { data: countData, isLoading: isCountLoading } = useQuery({
+		queryKey: ["applications-count"],
+		queryFn: fetchSessionsCount,
+	});
+
+	const totalCount = countData?.count ?? 0;
+	const pageCount = Math.ceil(totalCount / prefs.pagination.pageSize);
 	const { setAsset } = useUI();
 	const apiClient = useApiClient();
 
@@ -101,6 +111,7 @@ export default function ApplicationList() {
 
 			eventSource.addEventListener("session:update", () => {
 				queryClient.invalidateQueries({ queryKey: ["applications"] });
+				queryClient.invalidateQueries({ queryKey: ["applications-count"] });
 			});
 		} catch (e) {
 			console.error(e);
@@ -190,6 +201,7 @@ export default function ApplicationList() {
 			try {
 				await updateJobStatus(sessionId, { jobStatus: nextStatus });
 				queryClient.invalidateQueries({ queryKey: ["applications"] });
+				queryClient.invalidateQueries({ queryKey: ["applications-count"] });
 			} catch (error) {
 				console.error("Error updating job status:", error);
 			}
@@ -203,6 +215,7 @@ export default function ApplicationList() {
 				try {
 					await deleteSession(sessionId);
 					queryClient.invalidateQueries({ queryKey: ["applications"] });
+					queryClient.invalidateQueries({ queryKey: ["applications-count"] });
 				} catch (error) {
 					console.error("Error deleting session:", error);
 				}
@@ -217,6 +230,7 @@ export default function ApplicationList() {
 				try {
 					await retrySession(sessionId);
 					queryClient.invalidateQueries({ queryKey: ["applications"] });
+					queryClient.invalidateQueries({ queryKey: ["applications-count"] });
 				} catch (error) {
 					console.error("Error retrying session:", error);
 				}
@@ -251,6 +265,7 @@ export default function ApplicationList() {
 			});
 			closeNotes();
 			queryClient.invalidateQueries({ queryKey: ["applications"] });
+			queryClient.invalidateQueries({ queryKey: ["applications-count"] });
 		} catch (e) {
 			console.error(e);
 		}
@@ -265,6 +280,7 @@ export default function ApplicationList() {
 			await retrySession(notesDialog.sessionId);
 			closeNotes();
 			queryClient.invalidateQueries({ queryKey: ["applications"] });
+			queryClient.invalidateQueries({ queryKey: ["applications-count"] });
 		} catch (e) {
 			console.error(e);
 		}
@@ -398,7 +414,7 @@ export default function ApplicationList() {
 					if (session.sessionStatus === "processing") {
 						return (
 							<div className="">
-								<Skeleton className="h-4 w-28" />
+								<Skeleton className="h-4 w-24" />
 							</div>
 						);
 					}
@@ -549,19 +565,19 @@ export default function ApplicationList() {
 				id: "actions",
 				header: "Actions",
 				cell: ({ row }) => (
-					<div className="flex gap-1">
-						{(row.original.sessionStatus === "failed" ||
-							row.original.sessionStatus === "done") && (
+					<div className="grid grid-cols-2 gap-1">
+						{
 							<Button
 								size="sm"
 								variant="ghost"
 								className="cursor-pointer hover:scale-125 text-blue-600 hover:text-blue-700"
 								onClick={() => handleRetrySession(row.original.id)}
 								title="Retry session"
+								disabled={row.original.sessionStatus === "processing"}
 							>
 								<RotateCcw size={20} />
 							</Button>
-						)}
+						}
 						<Button
 							size="sm"
 							variant="ghost"
@@ -633,7 +649,6 @@ export default function ApplicationList() {
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getFilteredRowModel: getFilteredRowModel(),
-		getPaginationRowModel: getPaginationRowModel(),
 		filterFns: { fuzzy: fuzzyFilter },
 		globalFilterFn: fuzzyFilter,
 		columnResizeMode: "onChange",
@@ -643,6 +658,9 @@ export default function ApplicationList() {
 			size: 150,
 			maxSize: 800,
 		},
+		// Manual pagination configuration
+		manualPagination: true,
+		pageCount: pageCount,
 	});
 
 	const reorderColumn = (columnId: string, direction: "up" | "down") => {
@@ -658,11 +676,41 @@ export default function ApplicationList() {
 		table.setColumnOrder(next);
 	};
 
-	if (isLoading) return <Spinner />;
-	if (isError) return <div>Error loading sessions</div>;
+	if (isLoading && !sessions) {
+		return (
+			<div className="flex items-center justify-center p-8">
+				<Spinner />
+				<span className="ml-2">Loading sessions...</span>
+			</div>
+		);
+	}
 
-	if (sessions.length === 0) {
-		return <div>No sessions yet</div>;
+	if (isError) {
+		return (
+			<div className="flex items-center justify-center p-8 text-red-600">
+				<div className="text-center">
+					<div className="text-lg font-semibold">Error loading sessions</div>
+					<div className="text-sm text-gray-600 mt-1">
+						Please try refreshing the page
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (totalCount === 0) {
+		return (
+			<div className="flex items-center justify-center p-8">
+				<div className="text-center">
+					<div className="text-lg font-semibold text-gray-600">
+						No sessions yet
+					</div>
+					<div className="text-sm text-gray-500 mt-1">
+						Start by adding a job application to get started
+					</div>
+				</div>
+			</div>
+		);
 	}
 
 	return (
@@ -771,7 +819,15 @@ export default function ApplicationList() {
 				)}
 			</div>
 
-			<div className="overflow-auto rounded-md border">
+			<div className="overflow-auto rounded-md border relative min-h-[400px]">
+				{isLoading && sessions && (
+					<div className="absolute inset-0 bg-white/50 flex items-center justify-center z-20">
+						<div className="flex items-center">
+							<Spinner />
+							<span className="ml-2">Loading...</span>
+						</div>
+					</div>
+				)}
 				<table className="w-full text-left">
 					<thead className="sticky top-0 z-10 bg-white">
 						{table.getHeaderGroups().map((headerGroup) => (
@@ -831,24 +887,51 @@ export default function ApplicationList() {
 						))}
 					</thead>
 					<tbody>
-						{table.getRowModel().rows.map((row) => (
-							<tr key={row.id} className="border-b hover:bg-gray-50">
-								{row.getVisibleCells().map((cell) => (
-									<td
-										key={cell.id}
-										className={
-											(prefs.columnDensity === "compact"
-												? "p-1"
-												: prefs.columnDensity === "comfortable"
-													? "p-3"
-													: "p-2") + " align-middle"
-										}
-									>
-										{flexRender(cell.column.columnDef.cell, cell.getContext())}
-									</td>
-								))}
+						{table.getRowModel().rows.length === 0 ? (
+							<tr>
+								<td
+									colSpan={table.getAllColumns().length}
+									className="text-center py-8 text-gray-500 h-[320px] align-middle"
+								>
+									{isLoading ? (
+										<div className="flex items-center justify-center">
+											<Spinner />
+											<span className="ml-2">Loading sessions...</span>
+										</div>
+									) : (
+										<div>
+											<div className="text-lg font-medium">
+												No sessions on this page
+											</div>
+											<div className="text-sm mt-1">
+												Try adjusting your search or navigating to a different
+												page
+											</div>
+										</div>
+									)}
+								</td>
 							</tr>
-						))}
+						) : (
+							table.getRowModel().rows.map((row) => (
+								<tr key={row.id} className="border-b hover:bg-gray-50">
+									{row.getVisibleCells().map((cell) => (
+										<td
+											key={cell.id}
+											className={cn("align-middle", {
+												"p-1": prefs.columnDensity === "compact",
+												"p-3": prefs.columnDensity === "comfortable",
+												"p-2": prefs.columnDensity === "normal",
+											})}
+										>
+											{flexRender(
+												cell.column.columnDef.cell,
+												cell.getContext(),
+											)}
+										</td>
+									))}
+								</tr>
+							))
+						)}
 					</tbody>
 				</table>
 			</div>
@@ -861,7 +944,8 @@ export default function ApplicationList() {
 						onChange={(e) => {
 							table.setPageSize(Number(e.target.value));
 						}}
-						className="border-input h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[1px]"
+						disabled={isLoading || isCountLoading}
+						className="border-input h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						{[10, 25, 50, 100].map((pageSize) => (
 							<option key={pageSize} value={pageSize}>
@@ -870,8 +954,17 @@ export default function ApplicationList() {
 						))}
 					</select>
 					<span className="text-sm text-gray-600">
-						Page {table.getState().pagination.pageIndex + 1} of{" "}
-						{table.getPageCount()}
+						{isCountLoading ? (
+							<span className="flex items-center">
+								<div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 mr-1" />
+								Loading...
+							</span>
+						) : (
+							<>
+								Page {table.getState().pagination.pageIndex + 1} of {pageCount}
+								<span className="ml-2 text-gray-500">({totalCount} total)</span>
+							</>
+						)}
 					</span>
 				</div>
 
@@ -880,17 +973,24 @@ export default function ApplicationList() {
 						variant="outline"
 						size="sm"
 						onClick={() => table.previousPage()}
-						disabled={!table.getCanPreviousPage()}
+						disabled={!table.getCanPreviousPage() || isLoading}
 					>
 						<ChevronLeft className="h-4 w-4" />
 						Previous
 					</Button>
 					<div className="flex items-center gap-1">
-						{Array.from(
-							{ length: Math.min(5, table.getPageCount()) },
-							(_, i) => {
+						{isCountLoading ? (
+							<div className="flex items-center gap-1">
+								{[1, 2, 3, 4, 5].map((i) => (
+									<div
+										key={i}
+										className="h-8 w-8 rounded border bg-gray-100 animate-pulse"
+									/>
+								))}
+							</div>
+						) : (
+							Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
 								const pageIndex = table.getState().pagination.pageIndex;
-								const pageCount = table.getPageCount();
 								let pageNumber: number;
 
 								if (pageCount <= 5) {
@@ -909,19 +1009,19 @@ export default function ApplicationList() {
 										variant={pageNumber === pageIndex ? "default" : "outline"}
 										size="sm"
 										onClick={() => table.setPageIndex(pageNumber)}
-										disabled={pageNumber >= pageCount}
+										disabled={pageNumber >= pageCount || isLoading}
 									>
 										{pageNumber + 1}
 									</Button>
 								);
-							},
+							})
 						)}
 					</div>
 					<Button
 						variant="outline"
 						size="sm"
 						onClick={() => table.nextPage()}
-						disabled={!table.getCanNextPage()}
+						disabled={!table.getCanNextPage() || isLoading}
 					>
 						Next
 						<ChevronRight className="h-4 w-4" />
