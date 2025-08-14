@@ -93,7 +93,7 @@ export default class LLM {
 	#mcps: Array<{
 		name: string;
 		client: Client;
-		tools: ChatCompletionTool[];
+		tools: ChatCompletionTool["function"][];
 		prompts: Prompt[];
 	}> = [];
 	#tools: NativeTool<z.ZodRawShape>[] = [];
@@ -161,7 +161,7 @@ export default class LLM {
 				return {
 					name: tool.name,
 					description: tool.description,
-					inputSchema: tool.inputSchema,
+					parameters: tool.inputSchema,
 				};
 			});
 		}
@@ -473,13 +473,6 @@ ${JSON.stringify(this.getTools())}
 					}));
 
 					this.#messages.push(choice.message);
-
-					console.log("Tool Calls");
-					console.log(
-						choice.message.tool_calls.map(
-							(t) => `${t.function.name}: ${t.function.arguments}`,
-						),
-					);
 
 					// No parallel tool calls for now
 					for (const toolCall of choice.message.tool_calls) {
