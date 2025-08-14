@@ -72,6 +72,7 @@ Output only the LaTeX code, wrapped in a Markdown code block—no extra explanat
 
 Use this exact preamble (do not change it):
 
+<preamble>
 \\documentclass[10pt]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage{geometry}
@@ -92,6 +93,7 @@ Use this exact preamble (do not change it):
 
 % List spacing
 \\setlist[itemize]{leftmargin=*, itemsep=0pt, parsep=0pt, topsep=2pt}
+</preamble>
 
 Here is a good reference for a Berkeley-format resume:
 ---
