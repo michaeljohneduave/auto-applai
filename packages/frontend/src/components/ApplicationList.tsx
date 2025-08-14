@@ -25,6 +25,7 @@ import {
 	Link2,
 	MoveDownLeft,
 	MoveUpRight,
+	RotateCcw,
 	ScrollText,
 	Settings2,
 	Trash2,
@@ -37,8 +38,10 @@ import {
 	useDeleteSession,
 	useFetchResumePdf,
 	useFetchSessions,
+	useRetrySession,
 	useUpdateJobStatus,
 } from "../api";
+import { useApiClient } from "../api/client";
 import { useUI } from "../contexts/UIContext";
 import { useApplicationsTablePrefs } from "../stores/tablePrefs";
 import Spinner from "./Spinner";
@@ -79,6 +82,7 @@ export default function ApplicationList() {
 		queryFn: fetchSessionsWithPagination,
 	});
 	const { setAsset } = useUI();
+	const apiClient = useApiClient();
 
 	useEffect(() => {
 		let eventSource: EventSource | null;
@@ -531,17 +535,32 @@ export default function ApplicationList() {
 				id: "actions",
 				header: "Actions",
 				cell: ({ row }) => (
-					<Button
-						size="sm"
-						variant="ghost"
-						className="cursor-pointer hover:scale-125 text-red-600 hover:text-red-700"
-						onClick={() => handleDeleteSession(row.original.id)}
-					>
-						<Trash2 size={20} />
-					</Button>
+					<div className="flex gap-1">
+						{(row.original.sessionStatus === "failed" ||
+							row.original.sessionStatus === "done") && (
+							<Button
+								size="sm"
+								variant="ghost"
+								className="cursor-pointer hover:scale-125 text-blue-600 hover:text-blue-700"
+								onClick={() => handleRetrySession(row.original.id)}
+								title="Retry session"
+							>
+								<RotateCcw size={20} />
+							</Button>
+						)}
+						<Button
+							size="sm"
+							variant="ghost"
+							className="cursor-pointer hover:scale-125 text-red-600 hover:text-red-700"
+							onClick={() => handleDeleteSession(row.original.id)}
+							title="Delete session"
+						>
+							<Trash2 size={20} />
+						</Button>
+					</div>
 				),
 				enableSorting: false,
-				size: 100,
+				size: 120,
 			},
 		],
 		[handleAssetClick, handleChangeJobStatus, handleDeleteSession, fuzzyFilter],

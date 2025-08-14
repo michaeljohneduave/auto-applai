@@ -5,6 +5,7 @@ interface Job {
 	jobUrl: string;
 	html?: string;
 	forceNew?: boolean;
+	retry?: boolean;
 }
 
 class InMemoryQueue {

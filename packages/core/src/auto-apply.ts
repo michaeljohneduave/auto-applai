@@ -252,6 +252,18 @@ async function saveAssets(
 	);
 }
 
+async function storeSessionHtml(
+	sessionId: string,
+	html: string,
+	screenshot?: string,
+) {
+	await db.insert(sessionHtml).values({
+		sessionId,
+		html,
+		screenshot,
+	});
+}
+
 async function updateSession(
 	userId: string,
 	sessionId: string,
@@ -298,6 +310,16 @@ export async function runWithUrl(
 		});
 
 		const { html, screenshot } = await htmlCrawler(jobUrl);
+
+		// Store HTML for potential retries (only on first run, not retries)
+		const existingHtmlCount = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(sessionHtml)
+			.where(eq(sessionHtml.sessionId, sessionId));
+
+		if (existingHtmlCount[0]?.count === 0) {
+			await storeSessionHtml(sessionId, html, screenshot);
+		}
 
 		let applicationDetails = await extractInfo(html, sessionId);
 
@@ -533,6 +555,16 @@ export async function runWithHtml(
 			personalInfo,
 			personalMetadata,
 		} = await loadApplicationContext(sessionId, userId);
+
+		// Store HTML for potential retries (only on first run, not retries)
+		const existingHtmlCount = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(sessionHtml)
+			.where(eq(sessionHtml.sessionId, sessionId));
+
+		if (existingHtmlCount[0]?.count === 0) {
+			await storeSessionHtml(sessionId, html);
+		}
 
 		let session = await updateSession(
 			userId,

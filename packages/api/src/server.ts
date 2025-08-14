@@ -350,7 +350,7 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 	schema: getSessionByUrlSchema,
 	preHandler: authHandler,
 	handler: async (req) => {
-		const splitUrl = req.query.url.split("/");
+		const url = new URL(req.query.url);
 
 		const response = await db.query.sessions.findFirst({
 			where: (sessions) =>
@@ -358,7 +358,7 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 					eq(sessions.userId, req.authSession.userId!),
 					or(
 						eq(sessions.url, req.query.url),
-						eq(sessions.url, splitUrl.slice(0, -1).join("/")),
+						like(sessions.url, `${url.origin}${url.pathname}%`),
 					),
 					eq(sessions.sessionStatus, "done"),
 					isNull(sessions.deletedAt),
@@ -519,6 +519,98 @@ app.withTypeProvider<ZodTypeProvider>().route({
 			);
 
 		reply.send(200);
+	},
+});
+
+// Retry session endpoint
+const retrySessionSchema = {
+	params: z.object({
+		sessionId: z.string(),
+	}),
+};
+export type RetrySessionParams = z.infer<typeof retrySessionSchema.params>;
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "POST",
+	url: "/sessions/:sessionId/retry",
+	schema: retrySessionSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		// Get the session to check ownership and get stored HTML
+		const session = await db.query.sessions.findFirst({
+			where: (sessions) =>
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.params.sessionId),
+					isNull(sessions.deletedAt),
+				),
+		});
+
+		if (!session) {
+			throw new Error("Session not found");
+		}
+
+		// Get stored HTML for this session
+		const [storedHtml] = await db
+			.select()
+			.from(sessionHtml)
+			.where(eq(sessionHtml.sessionId, req.params.sessionId))
+			.orderBy(desc(sessionHtml.createdAt))
+			.limit(1);
+
+		if (!storedHtml) {
+			throw new Error("No stored HTML found for this session");
+		}
+
+		// Transaction
+		await db.transaction(async (tx) => {
+			// Update session for retry
+			await tx
+				.update(sessions)
+				.set({
+					sessionStatus: "processing",
+					currentStep: "extracting_info",
+					retryCount: sql`retry_count + 1`,
+					lastRetryAt: Date.now(),
+					title: null,
+					applicationForm: null,
+					personalInfo: null,
+					companyInfo: null,
+					jobInfo: null,
+					assetPath: null,
+					coverLetter: null,
+					answeredForm: null,
+				})
+				.where(
+					and(
+						eq(sessions.userId, req.authSession.userId!),
+						eq(sessions.id, req.params.sessionId),
+					),
+				);
+			// Clear existing logs for this session
+			await tx.delete(logs).where(eq(logs.sessionId, req.params.sessionId));
+			// Clear existing resume variants for this session
+			await tx
+				.delete(resumeVariants)
+				.where(eq(resumeVariants.sessionId, req.params.sessionId));
+		});
+
+		emitSessionUpdate({
+			userId: req.authSession.userId!,
+			sessionId: req.params.sessionId,
+		});
+
+		// Enqueue retry job with stored HTML
+		queue.enqueue({
+			jobUrl: session.url,
+			userId: req.authSession?.userId!,
+			html: storedHtml.html || undefined,
+			retry: true,
+		});
+
+		reply.code(200).send({
+			message: "Retry enqueued",
+		});
 	},
 });
 

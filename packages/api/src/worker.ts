@@ -1,31 +1,42 @@
 import { randomUUID } from "node:crypto";
+import { emitSessionUpdate } from "@auto-apply/common/src/events";
+import { db } from "@auto-apply/core/src/db/db.ts";
 import { type Sessions, sessions } from "@auto-apply/core/src/db/schema";
-import { and, desc, eq, isNull, like, or } from "drizzle-orm";
+import { and, desc, eq, isNull, like, not, or } from "drizzle-orm";
 import { runWithHtml, runWithUrl } from "../../core/src/auto-apply";
 import { queue } from "../../core/src/utils/queue";
-import { db } from "@auto-apply/core/src/db/db.ts";
-import { emitSessionUpdate } from "./events";
 
 async function processJob() {
 	const job = queue.dequeue();
 	if (job) {
-		const { userId, jobUrl, html, forceNew } = job;
+		const { userId, jobUrl, html, forceNew, retry } = job;
 
-		let session: Sessions | null = null;
+		let session: Pick<Sessions, "id"> | null = null;
 		// Temp workaround for multi-url sessions
-		// Ex: job-url.com has the job details and job-url.com/apply has the application form
-		const url = jobUrl.split("/").slice(0, -1).join("/");
+		const url = new URL(jobUrl);
+
+		console.log("--------------------------------");
+		console.log("New Job");
+		console.log(job);
+		console.log("--------------------------------");
 
 		// Check if this url has already been processed but with a slightly different url
 		// Skip this check if forceNew is true
 		if (!forceNew) {
 			const [existingSession] = await db
-				.select()
+				.select({
+					id: sessions.id,
+				})
 				.from(sessions)
 				.where(
 					and(
-						or(eq(sessions.url, jobUrl), like(sessions.url, `${url}%`)),
+						or(
+							eq(sessions.url, jobUrl),
+							like(sessions.url, `${url.origin}${url.pathname}%`),
+						),
 						eq(sessions.userId, userId),
+						not(eq(sessions.sessionStatus, "failed")),
+						// retry ? undefined : eq(sessions.sessionStatus, "done"),
 						isNull(sessions.deletedAt),
 					),
 				)
@@ -34,6 +45,15 @@ async function processJob() {
 
 			if (existingSession) {
 				session = existingSession;
+			} else {
+				console.warn(
+					"No existing session found for url. Creating new session",
+					jobUrl,
+					userId,
+					forceNew,
+					retry,
+					`${url.origin}${url.pathname}`,
+				);
 			}
 		}
 
@@ -46,7 +66,9 @@ async function processJob() {
 					url: jobUrl,
 					userId: userId,
 				})
-				.returning();
+				.returning({
+					id: sessions.id,
+				});
 		}
 
 		emitSessionUpdate({

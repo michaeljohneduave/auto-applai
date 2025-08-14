@@ -98,3 +98,9 @@ export const useFetchSessionLogs = () => {
 	return (sessionId: string): Promise<TransformedLogs> =>
 		apiClient.get(`/sessions/${sessionId}/logs`);
 };
+
+export const useRetrySession = () => {
+	const apiClient = useApiClient();
+	return (sessionId: string) =>
+		apiClient.post(`/sessions/${sessionId}/retry`, {}, "json");
+};

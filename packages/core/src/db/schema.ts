@@ -87,6 +87,10 @@ export const sessions = sqliteTable("sessions", {
 		})
 		.$type<SessionCost | null>(),
 	assetPath: t.text("asset_path"),
+	retryCount: t.integer("retry_count").default(0),
+	lastRetryAt: t.integer("last_retry_at", {
+		mode: "number",
+	}),
 	createdAt: t
 		.integer({
 			mode: "number",
@@ -122,8 +126,7 @@ export const logs = sqliteTable("session_logs", {
 		.text("response_log", {
 			mode: "json",
 		})
-		.$type<ResponseLog>()
-		.notNull(),
+		.$type<ResponseLog>(),
 	duration: t
 		.integer({
 			mode: "number",
@@ -141,6 +144,24 @@ export const logs = sqliteTable("session_logs", {
 		.$onUpdate(() => sql`(unixepoch() * 1000)`),
 });
 
+export const sessionHtml = sqliteTable("session_html", {
+	id: t
+		.integer({
+			mode: "number",
+		})
+		.primaryKey({
+			autoIncrement: true,
+		}),
+	sessionId: t.text("session_id").notNull(),
+	html: t.text("html").notNull(),
+	screenshot: t.text("screenshot"),
+	createdAt: t
+		.integer({
+			mode: "number",
+		})
+		.default(sql`(unixepoch() * 1000)`),
+});
+
 export const users = sqliteTable("users", {
 	userId: t.text("user_id").notNull().primaryKey(),
 	baseResumeMd: t.text("base_resume_md").notNull(),
@@ -151,3 +172,4 @@ export const users = sqliteTable("users", {
 export type Sessions = InferSelectModel<typeof sessions>;
 export type Users = InferSelectModel<typeof users>;
 export type Logs = InferSelectModel<typeof logs>;
+export type SessionHtml = InferSelectModel<typeof sessionHtml>;
