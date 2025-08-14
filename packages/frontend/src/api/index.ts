@@ -6,6 +6,7 @@ import type {
 	PostSessionsBody,
 	PutAssetsBody,
 	PutSessionJobStatusBody,
+	PutSessionNotesBody,
 } from "@auto-apply/api/src/server.ts";
 import { useApiClient } from "./client";
 
@@ -79,6 +80,12 @@ export const useUpdateJobStatus = () => {
 	const apiClient = useApiClient();
 	return (sessionId: string, body: PutSessionJobStatusBody) =>
 		apiClient.put(`/sessions/${sessionId}/job-status`, body);
+};
+
+export const useUpdateSessionNotes = () => {
+	const apiClient = useApiClient();
+	return (sessionId: string, body: PutSessionNotesBody) =>
+		apiClient.put(`/sessions/${sessionId}/notes`, body);
 };
 
 export const useDeleteSession = () => {

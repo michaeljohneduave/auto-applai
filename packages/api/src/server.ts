@@ -13,6 +13,8 @@ import { generatePdf } from "./utils.ts";
 
 import "./worker.ts";
 import path from "node:path";
+import { emitSessionUpdate, eventBus } from "@auto-apply/common/src/events.ts";
+import { db } from "@auto-apply/core/src/db/db.ts";
 import {
 	jobStatus,
 	type Sessions,
@@ -24,8 +26,7 @@ import { queue } from "@auto-apply/core/src/utils/queue.ts";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { toKebabCase } from "remeda";
 import { z } from "zod";
-import { db } from "@auto-apply/core/src/db/db.ts";
-import { eventBus } from "./events.ts";
+import { emitSessionUpdate, eventBus } from "./events.ts";
 import { transformSessionLogs } from "./log-transformer";
 import { getModelPricing } from "./models-cache";
 
@@ -450,6 +451,45 @@ app.withTypeProvider<ZodTypeProvider>().route({
 					eq(sessions.id, req.params.sessionId),
 				),
 			);
+
+		reply.send(200);
+	},
+});
+
+// Update session notes
+const putSessionNotesSchema = {
+	body: z.object({
+		notes: z.string().max(1000),
+	}),
+	params: z.object({
+		sessionId: z.string(),
+	}),
+};
+export type PutSessionNotesBody = z.infer<typeof putSessionNotesSchema.body>;
+export type PutSessionNotesParams = z.infer<
+	typeof putSessionNotesSchema.params
+>;
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "PUT",
+	url: "/sessions/:sessionId/notes",
+	schema: putSessionNotesSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		await db
+			.update(sessions)
+			.set({ notes: req.body.notes })
+			.where(
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.params.sessionId),
+				),
+			);
+
+		emitSessionUpdate({
+			userId: req.authSession.userId!,
+			sessionId: req.params.sessionId,
+		});
 
 		reply.send(200);
 	},

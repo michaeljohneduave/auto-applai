@@ -44,6 +44,8 @@ export const sessions = sqliteTable("sessions", {
 	title: t.text("title"),
 	companyName: t.text("company_name"),
 	url: t.text("url").notNull(),
+	// Free-form user-provided notes/markdown for this session
+	notes: t.text("notes"),
 	sessionStatus: t
 		.text("session_status", { enum: sessionStatus })
 		.default("processing"),

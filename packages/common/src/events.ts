@@ -1,8 +1,7 @@
 import { EventEmitter } from "node:events";
-import type { Sessions } from "@auto-apply/core/src/db/schema";
 
-type SessionEvent = {
-	userId: Sessions["userId"];
+export type SessionEvent = {
+	userId: string;
 	sessionId: string;
 };
 

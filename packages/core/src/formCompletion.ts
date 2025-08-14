@@ -16,12 +16,14 @@ export async function formCompleter({
 	personalMetadata,
 	context,
 	sessionId,
+	notes,
 }: {
 	applicationDetails: z.infer<typeof jobPostingSchema>;
 	resume: string;
 	personalMetadata: string;
 	context: string[];
 	sessionId: string;
+	notes?: string;
 }) {
 	const llm = new LLM("form-completer", {
 		model: GEMINI_25_FLASH,
@@ -84,6 +86,8 @@ Your process is now prioritized into three main stages:
 2. Refer to the <personal-info> section for cover letter reference.
 3. Do not add any styling (bold, italic) in the cover letter. It should in plain text format
 
+If <applicant-notes> is provided, incorporate any relevant details into both the form answers and the cover letter.
+
 # Example of the Full Feedback Loop
 1. You see an application form and try your best to answer it with relevant context.
 2. If you don't have enough context, ask for clarification.
@@ -111,6 +115,8 @@ ${personalMetadata}
 <company-context>
 ${context.join("\n")}
 </company-context>
+
+${notes?.length ? `<applicant-notes>\n${notes}\n</applicant-notes>` : ""}
 	`,
 		},
 		{

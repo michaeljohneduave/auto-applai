@@ -362,8 +362,17 @@ export async function runWithUrl(
 			currentStep: "generating_resume",
 		});
 
+		const currentSession = await db.query.sessions.findFirst({
+			where: (s) => and(eq(s.userId, userId), eq(s.id, sessionId)),
+		});
+
 		const { adjustedResume, generatedEvals, generatedResumes } =
-			await generateResume(ogResumeMd, applicationDetails, sessionId);
+			await generateResume(
+				ogResumeMd,
+				applicationDetails,
+				sessionId,
+				currentSession?.notes || undefined,
+			);
 
 		if (!adjustedResume) {
 			throw new Error("Updated resume not generated");
@@ -460,6 +469,7 @@ export async function runWithUrl(
 				resume: ogResumeMd,
 				personalMetadata,
 				context: mdContent.map((md) => md.markdown),
+				notes: currentSession?.notes || undefined,
 			});
 
 			await updateSession(userId, sessionId, {
@@ -591,8 +601,16 @@ export async function runWithHtml(
 		// If the session doesn't have an assetPath, its lacking the generated resume
 		// We only skip this if we encounter a html content for application form (no job+company details)
 		if (!assetPath) {
+			const currentSession = await db.query.sessions.findFirst({
+				where: (s) => and(eq(s.userId, userId), eq(s.id, sessionId)),
+			});
 			const { adjustedResume, generatedEvals, generatedResumes } =
-				await generateResume(ogResumeMd, applicationDetails, sessionId);
+				await generateResume(
+					ogResumeMd,
+					applicationDetails,
+					sessionId,
+					currentSession?.notes || undefined,
+				);
 
 			await updateSession(userId, sessionId, {
 				currentStep: "generating_latex",
@@ -642,12 +660,16 @@ export async function runWithHtml(
 		}
 
 		// Complete form with interactive clarifications
+		const currentSession = await db.query.sessions.findFirst({
+			where: (s) => and(eq(s.userId, userId), eq(s.id, sessionId)),
+		});
 		const completedForm = await formCompleter({
 			sessionId,
 			applicationDetails,
 			resume: ogResumeMd,
 			personalMetadata,
 			context: mdContent.map((md) => md.markdown),
+			notes: currentSession?.notes || undefined,
 		});
 
 		await updateSession(userId, sessionId, {

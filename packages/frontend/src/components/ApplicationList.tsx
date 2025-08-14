@@ -193,6 +193,65 @@ export default function ApplicationList() {
 		[deleteSession, queryClient],
 	);
 
+	const handleRetrySession = useCallback(
+		async (sessionId: string) => {
+			if (confirm("Are you sure you want to retry this session?")) {
+				try {
+					await retrySession(sessionId);
+					queryClient.invalidateQueries({ queryKey: ["applications"] });
+				} catch (error) {
+					console.error("Error retrying session:", error);
+				}
+			}
+		},
+		[retrySession, queryClient],
+	);
+
+	const [notesDialog, setNotesDialog] = useState<{
+		open: boolean;
+		sessionId: string | null;
+		value: string;
+	}>({ open: false, sessionId: null, value: "" });
+
+	const openNotes = useCallback(
+		(sessionId: string) => {
+			const current = sessions.find((s) => s.id === sessionId);
+			setNotesDialog({ open: true, sessionId, value: current?.notes ?? "" });
+		},
+		[sessions],
+	);
+
+	const closeNotes = useCallback(() => {
+		setNotesDialog({ open: false, sessionId: null, value: "" });
+	}, []);
+
+	const handleSaveNotes = useCallback(async () => {
+		if (!notesDialog.sessionId) return;
+		try {
+			await updateSessionNotes(notesDialog.sessionId, {
+				notes: notesDialog.value,
+			});
+			closeNotes();
+			queryClient.invalidateQueries({ queryKey: ["applications"] });
+		} catch (e) {
+			console.error(e);
+		}
+	}, [notesDialog, updateSessionNotes, closeNotes, queryClient]);
+
+	const handleSaveAndRetryNotes = useCallback(async () => {
+		if (!notesDialog.sessionId) return;
+		try {
+			await updateSessionNotes(notesDialog.sessionId, {
+				notes: notesDialog.value,
+			});
+			await retrySession(notesDialog.sessionId);
+			closeNotes();
+			queryClient.invalidateQueries({ queryKey: ["applications"] });
+		} catch (e) {
+			console.error(e);
+		}
+	}, [notesDialog, updateSessionNotes, retrySession, closeNotes, queryClient]);
+
 	const [columnMenuOpen, setColumnMenuOpen] = useState(false);
 	const columnsBtnRef = useRef<HTMLButtonElement | null>(null);
 	const menuRef = useRef<HTMLDivElement | null>(null);
@@ -255,6 +314,29 @@ export default function ApplicationList() {
 
 	const columns = useMemo<ColumnDef<GetSessionsResponse[number]>[]>(
 		() => [
+			{
+				id: "notes",
+				header: "Notes",
+				cell: ({ row }) => {
+					const hasNotes = Boolean(row.original.notes);
+					return (
+						<Button
+							size="sm"
+							variant="ghost"
+							className="relative cursor-pointer hover:scale-125"
+							onClick={() => openNotes(row.original.id)}
+							title={hasNotes ? "Edit notes" : "Add notes"}
+						>
+							<ScrollText />
+							{hasNotes ? (
+								<span className="absolute right-1 top-1 inline-block h-2 w-2 rounded-full bg-blue-500" />
+							) : null}
+						</Button>
+					);
+				},
+				enableSorting: false,
+				size: 80,
+			},
 			{
 				id: "company",
 				header: "Company",
@@ -806,6 +888,36 @@ export default function ApplicationList() {
 					</Button>
 				</div>
 			</div>
+			<Dialog
+				open={notesDialog.open}
+				onOpenChange={(open) => !open && closeNotes()}
+			>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle>Session Notes</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-2">
+						<textarea
+							value={notesDialog.value}
+							onChange={(e) => {
+								const v = e.target.value.slice(0, 1000);
+								setNotesDialog((prev) => ({ ...prev, value: v }));
+							}}
+							placeholder="Add Markdown/plain text notes (<= 1000 chars)"
+							className="w-full min-h-40 rounded-md border px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[1px]"
+						/>
+						<div className="text-right text-xs text-muted-foreground">
+							{notesDialog.value.length}/1000
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={handleSaveNotes}>
+							Save
+						</Button>
+						<Button onClick={handleSaveAndRetryNotes}>Save & Retry</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
