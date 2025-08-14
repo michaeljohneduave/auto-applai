@@ -334,10 +334,16 @@ const handleElementClick = (e: MouseEvent) => {
 		const htmlWithPseudo = getElementWithPseudoContent(target);
 		const selectedHtml = cleanHtml(htmlWithPseudo);
 
+		// Add URL and date metadata to HTML content for API
+		const htmlWithMetadata = `<!-- URL: ${window.location.href} -->
+<!-- Extracted on: ${new Date().toISOString()} -->
+
+${selectedHtml}`;
+
 		// Send message to background script instead of popup
 		chrome.runtime.sendMessage({
 			action: "elementSelected",
-			html: selectedHtml,
+			html: htmlWithMetadata,
 			url: window.location.href,
 		});
 
@@ -566,9 +572,15 @@ chrome.runtime.onMessage.addListener(
 					combinedContent = cleanHtml(document.body.innerHTML);
 				}
 
+				// Add URL and date metadata to HTML content for API
+				const htmlWithMetadata = `<!-- URL: ${window.location.href} -->
+<!-- Extracted on: ${new Date().toISOString()} -->
+
+${combinedContent}`;
+
 				chrome.runtime.sendMessage({
 					action: "pageScraped",
-					html: combinedContent,
+					html: htmlWithMetadata,
 					url: window.location.href,
 				});
 
