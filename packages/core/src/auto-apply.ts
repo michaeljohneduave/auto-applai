@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { emitSessionUpdate } from "@auto-apply/common";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import { toKebabCase } from "remeda";
@@ -282,6 +282,138 @@ async function storeSessionHtml(
 	});
 }
 
+async function handleFirstTimeHtml(
+	sessionId: string,
+	html: string,
+): Promise<z.infer<typeof jobPostingSchema>> {
+	await storeSessionHtml(sessionId, html);
+	return await extractInfo(html, sessionId);
+}
+
+async function handleRetryHtml(
+	sessionId: string,
+): Promise<z.infer<typeof jobPostingSchema>> {
+	// For retries, just get the existing HTML and process it
+	// No appending or additional checks since it's a manual user action
+	const [existingHtml] = await db
+		.select()
+		.from(sessionHtml)
+		.where(eq(sessionHtml.sessionId, sessionId))
+		.orderBy(desc(sessionHtml.createdAt))
+		.limit(1);
+
+	if (!existingHtml) {
+		throw new Error("No stored HTML found for retry");
+	}
+
+	// Simply extract info from the existing HTML
+	return await extractInfo(existingHtml.html, sessionId);
+}
+
+function shouldAppendHtml(
+	existingSession: Sessions,
+	newApplicationDetails: z.infer<typeof jobPostingSchema>,
+): boolean {
+	const hasExistingForms =
+		existingSession.applicationForm &&
+		existingSession.applicationForm.length > 0;
+	const hasNewForms = newApplicationDetails.applicationForm.length > 0;
+	const hasExistingJobInfo = Boolean(
+		existingSession.jobInfo && existingSession.companyInfo,
+	);
+	const hasNewJobInfo = Boolean(
+		newApplicationDetails.jobInfo && newApplicationDetails.companyInfo,
+	);
+
+	return (
+		(hasExistingForms &&
+			!hasNewForms &&
+			hasNewJobInfo &&
+			!hasExistingJobInfo) || // Existing has forms, new has job info
+		(!hasExistingForms &&
+			hasNewForms &&
+			hasExistingJobInfo &&
+			!hasNewJobInfo) || // Existing has job info, new has forms
+		(!hasExistingForms && hasNewForms) || // Neither has job info, but new has forms - just append
+		(!hasExistingJobInfo && hasNewJobInfo) // Neither has forms, but new has job info - just append
+	);
+}
+
+async function appendHtmlToExisting(
+	sessionId: string,
+	newHtml: string,
+): Promise<z.infer<typeof jobPostingSchema>> {
+	const [existingHtml] = await db
+		.select()
+		.from(sessionHtml)
+		.where(eq(sessionHtml.sessionId, sessionId))
+		.orderBy(desc(sessionHtml.createdAt))
+		.limit(1);
+
+	if (!existingHtml) {
+		throw new Error("No existing HTML found to append to");
+	}
+
+	// Append new HTML to existing
+	const combinedHtml =
+		existingHtml.html + "\n<!-- ADDITIONAL CONTENT -->\n" + newHtml;
+
+	// Update existing record with combined HTML
+	await db
+		.update(sessionHtml)
+		.set({ html: combinedHtml })
+		.where(eq(sessionHtml.id, existingHtml.id));
+
+	// Extract info from combined HTML
+	return await extractInfo(combinedHtml, sessionId);
+}
+
+async function handleExistingSessionHtml(
+	existingSession: Sessions,
+	sessionId: string,
+	html: string,
+): Promise<z.infer<typeof jobPostingSchema>> {
+	// Extract info from new HTML
+	const newApplicationDetails = await extractInfo(html, sessionId);
+
+	// Check if we need to append
+	if (shouldAppendHtml(existingSession, newApplicationDetails)) {
+		return await appendHtmlToExisting(sessionId, html);
+	} else {
+		// Use existing session data (avoid duplicates)
+		// Create a partial object that matches the schema structure
+		const result: Partial<z.infer<typeof jobPostingSchema>> = {
+			applicationForm: existingSession.applicationForm || [],
+		};
+
+		// Only include non-null values
+		if (existingSession.companyInfo) {
+			result.companyInfo = existingSession.companyInfo;
+		}
+		if (existingSession.jobInfo) {
+			result.jobInfo = existingSession.jobInfo;
+		}
+
+		return result as z.infer<typeof jobPostingSchema>;
+	}
+}
+
+// Function overloads
+async function updateSession(
+	userId: string,
+	sessionId: string,
+	setObj: Partial<Omit<Sessions, "id" | "userId" | "url">>,
+	options: { shouldReturn: true },
+): Promise<Sessions>;
+
+async function updateSession(
+	userId: string,
+	sessionId: string,
+	setObj: Partial<Omit<Sessions, "id" | "userId" | "url">>,
+	options?: { shouldReturn?: false | undefined },
+): Promise<void>;
+
+// Implementation
 async function updateSession(
 	userId: string,
 	sessionId: string,
@@ -291,7 +423,7 @@ async function updateSession(
 	} = {
 		shouldReturn: false,
 	},
-) {
+): Promise<Sessions | void> {
 	const op = db
 		.update(sessions)
 		.set(setObj)
@@ -564,6 +696,7 @@ export async function runWithHtml(
 	userId: string,
 	sessionId: string,
 	html: string,
+	retry: boolean = false,
 ) {
 	try {
 		const mdContent: {
@@ -579,16 +712,6 @@ export async function runWithHtml(
 			personalMetadata,
 		} = await loadApplicationContext(sessionId, userId);
 
-		// Store HTML for potential retries (only on first run, not retries)
-		const existingHtmlCount = await db
-			.select({ count: sql<number>`count(*)` })
-			.from(sessionHtml)
-			.where(eq(sessionHtml.sessionId, sessionId));
-
-		if (existingHtmlCount[0]?.count === 0) {
-			await storeSessionHtml(sessionId, html);
-		}
-
 		let session = await updateSession(
 			userId,
 			sessionId,
@@ -600,11 +723,34 @@ export async function runWithHtml(
 			},
 		);
 
+		// Retry path: short-circuit to using stored HTML only (no extra queries)
+		let applicationDetails: z.infer<typeof jobPostingSchema>;
+		if (retry) {
+			applicationDetails = await handleRetryHtml(sessionId);
+		} else {
+			// Check if any HTML exists for the session using an existence-style query
+			const [existing] = await db
+				.select({ id: sessionHtml.id })
+				.from(sessionHtml)
+				.where(eq(sessionHtml.sessionId, sessionId))
+				.limit(1);
+
+			if (!existing) {
+				// First time: store and extract
+				applicationDetails = await handleFirstTimeHtml(sessionId, html);
+			} else {
+				// Existing session: decide whether to append, using the already-fetched session
+				applicationDetails = await handleExistingSessionHtml(
+					session,
+					sessionId,
+					html,
+				);
+			}
+		}
+
 		if (!session) {
 			throw new Error("Attempted to update session but it failed");
 		}
-
-		const applicationDetails = await extractInfo(html, sessionId);
 
 		const setObj = {
 			personalInfo,
@@ -656,15 +802,12 @@ export async function runWithHtml(
 		// If the session doesn't have an assetPath, its lacking the generated resume
 		// We only skip this if we encounter a html content for application form (no job+company details)
 		if (!assetPath) {
-			const currentSession = await db.query.sessions.findFirst({
-				where: (s) => and(eq(s.userId, userId), eq(s.id, sessionId)),
-			});
 			const { adjustedResume, generatedEvals, generatedResumes } =
 				await generateResume(
 					ogResumeMd,
 					applicationDetails,
 					sessionId,
-					currentSession?.notes || undefined,
+					session?.notes || undefined,
 				);
 
 			await updateSession(userId, sessionId, {
@@ -767,16 +910,13 @@ export async function runWithHtml(
 		}
 
 		// Complete form with interactive clarifications
-		const currentSession = await db.query.sessions.findFirst({
-			where: (s) => and(eq(s.userId, userId), eq(s.id, sessionId)),
-		});
 		const completedForm = await formCompleter({
 			sessionId,
 			applicationDetails,
 			resume: ogResumeMd,
 			personalMetadata,
 			context: mdContent.map((md) => md.markdown),
-			notes: currentSession?.notes || undefined,
+			notes: session?.notes || undefined,
 		});
 
 		await updateSession(userId, sessionId, {
