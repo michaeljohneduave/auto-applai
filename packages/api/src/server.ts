@@ -27,11 +27,12 @@ import {
 	users,
 } from "@auto-apply/core/src/db/schema";
 import { queue } from "@auto-apply/core/src/utils/queue.ts";
-import { and, desc, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { toKebabCase } from "remeda";
 import { z } from "zod";
 import { transformSessionLogs } from "./log-transformer";
 import { getModelPricing } from "./models-cache";
+import { urlWhereClause } from "./utils";
 
 declare module "fastify" {
 	export interface FastifyInstance {
@@ -353,16 +354,11 @@ app.withTypeProvider<ZodTypeProvider>().route<{
 	schema: getSessionByUrlSchema,
 	preHandler: authHandler,
 	handler: async (req) => {
-		const url = new URL(req.query.url);
-
 		const response = await db.query.sessions.findFirst({
 			where: (sessions) =>
 				and(
 					eq(sessions.userId, req.authSession.userId!),
-					or(
-						eq(sessions.url, req.query.url),
-						like(sessions.url, `${url.origin}${url.pathname}%`),
-					),
+					urlWhereClause(req.query.url),
 					eq(sessions.sessionStatus, "done"),
 					isNull(sessions.deletedAt),
 				),

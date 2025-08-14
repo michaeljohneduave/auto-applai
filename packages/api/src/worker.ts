@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { emitSessionUpdate } from "@auto-apply/common/src/events";
 import { db } from "@auto-apply/core/src/db/db.ts";
 import { type Sessions, sessions } from "@auto-apply/core/src/db/schema";
-import { and, desc, eq, isNull, like, not, or } from "drizzle-orm";
+import { and, desc, eq, isNull, not } from "drizzle-orm";
 import { runWithHtml, runWithUrl } from "../../core/src/auto-apply";
 import { queue } from "../../core/src/utils/queue";
+import { urlWhereClause } from "./utils";
 
 async function processJob() {
 	const job = queue.dequeue();
@@ -30,13 +31,9 @@ async function processJob() {
 				.from(sessions)
 				.where(
 					and(
-						or(
-							eq(sessions.url, jobUrl),
-							like(sessions.url, `${url.origin}${url.pathname}%`),
-						),
 						eq(sessions.userId, userId),
+						urlWhereClause(jobUrl),
 						not(eq(sessions.sessionStatus, "failed")),
-						// retry ? undefined : eq(sessions.sessionStatus, "done"),
 						isNull(sessions.deletedAt),
 					),
 				)
@@ -83,7 +80,7 @@ async function processJob() {
 		);
 
 		if (html) {
-			await runWithHtml(userId, session.id, html);
+			await runWithHtml(userId, session.id, html, retry);
 		} else {
 			await runWithUrl(userId, session.id, jobUrl);
 		}
