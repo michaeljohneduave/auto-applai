@@ -55,10 +55,10 @@ type NativeTool<T extends z.ZodRawShape> = {
 	) => CallToolResult | Promise<CallToolResult>;
 };
 
-export const GEMINI_25_FLASH = "gemini-2.5-flash-preview-05-20";
-export const GEMINI_25_PRO = "gemini-2.5-pro-preview-06-05";
+export const GEMINI_25_FLASH = "gemini-2.5-flash";
+export const GEMINI_25_PRO = "gemini-2.5-pro";
 export const GEMINI_20_FLASH = "gemini-2.0-flash";
-export const GEMINI_25_FLASH_LITE = "gemini-2.5-flash-lite-preview-06-17";
+export const GEMINI_25_FLASH_LITE = "gemini-2.5-flash-lite";
 
 export const grok = {
 	apiKey: process.env.XAI_API_KEY,
@@ -68,13 +68,23 @@ export const grok = {
 	},
 };
 
+export const openai = {
+	apiKey: process.env.OPENAI_API_KEY,
+	baseUrl: "https://api.openai.com/v1",
+	models: {
+		BIG_MODEL: "gpt-5",
+		MEDIUM_MODEL: "gpt-5-mini",
+		SMALL_MODEL: "gpt-4.1-nano",
+	},
+};
+
 export const google = {
 	apiKey: process.env.GEMINI_API_KEY,
 	baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
 	models: {
-		BIG_MODEL: "gemini-2.5-flash-preview-05-20",
-		SMART_MODEL: "gemini-2.5-pro-preview-06-05",
-		SMALL_MODEL: "gemini-2.0-flash",
+		BIG_MODEL: GEMINI_25_FLASH,
+		SMART_MODEL: GEMINI_25_PRO,
+		SMALL_MODEL: GEMINI_20_FLASH,
 	},
 };
 
@@ -83,7 +93,7 @@ export default class LLM {
 	#mcps: Array<{
 		name: string;
 		client: Client;
-		tools: ChatCompletionTool["function"][];
+		tools: ChatCompletionTool[];
 		prompts: Prompt[];
 	}> = [];
 	#tools: NativeTool<z.ZodRawShape>[] = [];
@@ -510,14 +520,16 @@ ${JSON.stringify(this.getTools())}
 
 		await this.#waitForReady();
 
+		const completionParams: ChatCompletionCreateParamsNonStreaming = {
+			...params,
+			messages: this.#messages,
+			model: this.#model,
+		};
+
 		while (retries--) {
 			try {
 				const start = hrtime();
-				const completionParams: ChatCompletionCreateParamsNonStreaming = {
-					...params,
-					messages: this.#messages,
-					model: this.#model,
-				};
+
 				const response =
 					await this.#openai.beta.chat.completions.parse(completionParams);
 				const diff = hrtime(start);
@@ -529,14 +541,16 @@ ${JSON.stringify(this.getTools())}
 
 				return response;
 			} catch (error) {
-				console.error(error);
 				if (retries === 0) {
+					this.#logLlmCall(completionParams, null, 0);
+
 					if (error instanceof Error) {
 						throw new Error(
 							`Error processing query after retries: ${error.message}`,
 						);
 					}
 				}
+
 				if (error instanceof Error) {
 					console.warn(`Retrying query due to error: ${error.message}`);
 				}
@@ -548,7 +562,7 @@ ${JSON.stringify(this.getTools())}
 
 	async #logLlmCall(
 		request: ChatCompletionCreateParamsNonStreaming,
-		response: ChatCompletion,
+		response: ChatCompletion | null,
 		duration: number,
 	) {
 		await db.insert(logs).values({
