@@ -1,4 +1,3 @@
-import { toXML } from "jstoxml";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { z } from "zod";
 import LLM, { GEMINI_25_FLASH, GEMINI_25_PRO } from "./llm.ts";
@@ -16,10 +15,13 @@ You are a world-class professional resume writer and strategic career coach, ope
 Your primary objective is to revise and enhance a resume by meticulously implementing the feedback provided in a professional resume evaluation. You will use the evaluation as your primary guide to tailor the resume to the job posting, ensuring the final document addresses every critique and action item. You will follow a strict multi-pass process to ensure the highest quality output.
 
 # INPUTS
-You will receive three pieces of information wrapped in XML-style tags:
+You will receive up to four pieces of information wrapped in XML-style tags:
 1.  '<resume>': The user's base resume in Markdown format.
 2.  '<job-posting>': A JSON object containing structured data about the job and company.
-3.  '<resume-evaluation>': A detailed, structured critique of the resume, containing specific analysis and an action plan for improvement. **This is your primary instruction set for the revision.**
+3.  '<resume-evaluation>': A detailed, structured critique of the resume, containing specific analysis and an action plan for improvement. **This is your primary instruction set for the revision when provided.**
+4.  '<applicant-notes>': User-provided plain text/markdown context. Treat relevant details as high priority when tailoring the resume.
+
+Note: In early iterations, '<resume-evaluation>' may be absent. If it is missing, perform Pass 1 using '<resume>' and '<job-posting>' only. Incorporate the evaluation fully as soon as it is provided in subsequent iterations.
 
 # EXECUTION STRATEGY: A THREE-PASS PROCESS
 You will perform your task in three distinct, sequential passes. Do not attempt to combine these steps. Your goal is to apply the feedback from the '<resume-evaluation>' throughout this process.
@@ -88,7 +90,7 @@ This is your final quality assurance step. Review the resume from Pass 2 to ensu
 ---
 
 # FINAL OUTPUT FORMAT
-After completing all three passes, provide **only** the final, reviewed resume from Pass 3 in a single Markdown code block. Do not include any explanations, apologies, or text before or after the resume itself. Your entire response must be the code block containing the final resume.`;
+Return a single JSON object that conforms to the 'adjustedResumeSchema'. The 'resume' field must contain the final reviewed resume in Markdown. Do not include any extra text before or after the JSON.`;
 
 const evaluatorSystemPrompt = `
 **ROLE & GOAL:**
@@ -114,9 +116,11 @@ export async function generateResume(
 	resumeMd: string,
 	applicationDetails: z.infer<typeof jobPostingSchema>,
 	sessionId: string,
+	notes?: string,
 ) {
 	const resumeLLM = new LLM("resume-adjuster", {
-		model: GEMINI_25_PRO,
+		// model: GEMINI_25_PRO,
+		model: GEMINI_25_FLASH,
 		sessionId,
 	});
 	const evalLLM = new LLM("resume-evaluator", {
@@ -125,60 +129,53 @@ export async function generateResume(
 	});
 
 	const MAX_ITERATIONS = 5;
-	const TARGET_SCORE = 97;
+	const TARGET_SCORE = 95;
 
 	const generatedResumes: string[] = [];
 	const generatedEvals: z.infer<typeof resumeCritiqueSchema>[] = [];
 
-	resumeLLM.setMessages([
-		{
-			role: "system",
-			content: generateResumeSystemPrompt,
-		},
-		{
-			role: "user",
-			content: `
-<resume>
-${resumeMd}
-</resume>
-
-<application-details>
-${JSON.stringify({
-	companyInfo: applicationDetails.companyInfo,
-	jobInfo: applicationDetails.jobInfo,
-})}
-</application-details>
-`,
-		},
-	]);
-
-	evalLLM.setMessages([
-		{
-			role: "system",
-			content: evaluatorSystemPrompt,
-		},
-		{
-			role: "user",
-			content: `
-<original-resume>
-${resumeMd}
-</original-resume>
-
-<job-company-details>
-${toXML({
-	companyInfo: applicationDetails.companyInfo,
-	jobInfo: applicationDetails.jobInfo,
-})}
-</job-company-details>
-`,
-		},
-	]);
+	let lastEvaluation: z.infer<typeof resumeCritiqueSchema> | undefined;
+	let bestResume = resumeMd;
+	let bestScore = 0;
+	const jobPostingJson = JSON.stringify({
+		companyInfo: applicationDetails.companyInfo,
+		jobInfo: applicationDetails.jobInfo,
+	});
 
 	for (let i = 1; i <= MAX_ITERATIONS; i++) {
 		console.log("Generating resume #", i);
 
+		// Build stateless messages for the generator for this iteration
+		const resumeSource =
+			i === 1
+				? resumeMd
+				: generatedResumes[generatedResumes.length - 1] || resumeMd;
+		const userContent: string[] = [];
+
+		userContent.push(`<resume>\n${resumeSource}\n</resume>`);
+		userContent.push(`<job-posting>\n${jobPostingJson}\n</job-posting>`);
+		if (notes?.length) {
+			userContent.push(`<applicant-notes>\n${notes}\n</applicant-notes>`);
+		}
+
+		if (lastEvaluation) {
+			userContent.push(
+				`<resume-evaluation>\n${JSON.stringify(lastEvaluation)}\n</resume-evaluation>`,
+			);
+		}
+
+		resumeLLM.setMessages([
+			{
+				role: "system",
+				content: generateResumeSystemPrompt,
+			},
+			{
+				role: "user",
+				content: userContent.join("\n\n"),
+			},
+		]);
+
 		const resumeResponse = await resumeLLM.generateStructuredOutput({
-			reasoning_effort: "high",
 			response_format: zodResponseFormat(
 				adjustedResumeSchema,
 				"adjusted-resume",
@@ -195,28 +192,29 @@ ${toXML({
 			.parsed as z.infer<typeof adjustedResumeSchema>;
 
 		generatedResumes.push(parsedResumeResponse.resume);
-		resumeLLM.addMessage({
-			role: "assistant",
-			content: `
-<resume>
-${parsedResumeResponse.resume}
-</resume>
-`,
-		});
 
 		if (i === MAX_ITERATIONS) {
 			break;
 		}
 
 		console.log("Evaluating generated resume #", i);
-		evalLLM.addMessage({
-			role: "user",
-			content: `
-<resume>
-${parsedResumeResponse.resume}
-</resume>
-        `,
-		});
+		// Build stateless messages for the evaluator for this iteration
+		const evaluatorUserContent: string[] = [];
+
+		evaluatorUserContent.push(
+			`<resume>\n${parsedResumeResponse.resume}\n</resume>`,
+		);
+		evaluatorUserContent.push(
+			`<original-resume>\n${resumeMd}\n</original-resume>`,
+		);
+		evaluatorUserContent.push(
+			`<job-posting>\n${jobPostingJson}\n</job-posting>`,
+		);
+
+		evalLLM.setMessages([
+			{ role: "system", content: evaluatorSystemPrompt },
+			{ role: "user", content: evaluatorUserContent.join("\n\n") },
+		]);
 
 		const evaluationResponse = await evalLLM.generateStructuredOutput({
 			response_format: zodResponseFormat(
@@ -225,7 +223,6 @@ ${parsedResumeResponse.resume}
 			),
 			temperature: 0.5,
 			top_p: 0.9,
-			reasoning_effort: "high",
 		});
 
 		if (!evaluationResponse.choices[0].message.parsed) {
@@ -239,30 +236,22 @@ ${parsedResumeResponse.resume}
 		generatedEvals.push(parseEvaluationResponse);
 
 		console.log("currentScore", currentScore);
+
+		// Track the best scoring resume
+		if (currentScore > bestScore) {
+			bestScore = currentScore;
+			bestResume = parsedResumeResponse.resume;
+		}
+
 		if (currentScore >= TARGET_SCORE) {
 			break;
 		}
 
-		resumeLLM.addMessage({
-			role: "user",
-			content: `
-<resume-evaluation>
-${toXML(parseEvaluationResponse)}
-</resume-evaluation>
-`,
-		});
-		evalLLM.addMessage({
-			role: "assistant",
-			content: `
-<evalutation>
-${toXML(parseEvaluationResponse)}
-</evaluation>
-`,
-		});
+		lastEvaluation = parseEvaluationResponse;
 	}
 
 	return {
-		adjustedResume: generatedResumes[generatedResumes.length - 1],
+		adjustedResume: bestResume,
 		generatedResumes,
 		generatedEvals,
 	};
