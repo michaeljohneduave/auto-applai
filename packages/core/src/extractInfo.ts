@@ -8,7 +8,6 @@ export async function extractInfo(
 	html: string,
 	sessionId: string,
 ): Promise<z.infer<typeof jobPostingSchema>> {
-	console.log("Extracting Job information");
 	const llm = new LLM("JobCompanyApplicationExtractor", {
 		model: GEMINI_25_FLASH,
 		sessionId,
@@ -60,13 +59,22 @@ Given an image or html, extract 100% accurate job application information in str
    - Assessment: custom questions, scenarios
 
 # Output Format
-Strictly follow the jobPostingSchema structure with all required fields.
+- Return a single JSON object that validates against 'jobPostingSchema'.
+- Do not include any extra text, explanations, or markdown/code fences.
 
-# Validation Criteria
-- All required fields must be identified
-- Questions must be clear and answerable
-- Field types must be correctly classified
-- Form structure must be complete
+# Extraction & Anti-hallucination Rules
+- Only include information you can confidently extract from the provided content.
+- When a schema field is required but not explicitly present in the source:
+  - Arrays: return an empty array [].
+  - Enums with 'unknown'/'other' options: use those conservative defaults as indicated by the schema descriptions.
+  - Strings: return an empty string "".
+  - Booleans: prefer conservative defaults (e.g., false) unless clearly indicated by the source.
+  - Numeric values: if not clearly extractable and the schema expects a number, prefer omitting the field only when it is optional; otherwise do not fabricate.
+- Prefer verbatim copying of the source text over paraphrasing when uncertain.
+- Do not fabricate specific values.
+
+# Validation
+- Your output must validate against 'jobPostingSchema'.
 `,
 		},
 		{
@@ -107,7 +115,19 @@ You are a senior job posting analyst specializing in structured data extraction.
 Given an image or html, extract 100% accurate job information in structured format.
 
 # Output Format
-Strictly follow the job-info structure with all required fields.
+- Return a single JSON object that validates against the 'job-info' schema (jobPostingSchema.shape.jobInfo).
+- Do not include any extra text, explanations, or markdown/code fences.
+
+# Extraction & Anti-hallucination Rules
+- Only include information you can confidently extract from the provided content.
+- Arrays: return [] when no items are found.
+- Enums with 'unknown'/'other' options: use those conservative defaults when not clearly indicated.
+- Strings: use empty string "" when applicable; otherwise omit optional fields.
+- Do not fabricate numeric values; omit optional numeric fields if not extractable.
+- Prefer verbatim copying of source snippets when uncertain.
+
+# Validation
+- Your output must validate against jobPostingSchema.shape.jobInfo.
 `,
 		},
 		{
@@ -120,7 +140,7 @@ Strictly follow the job-info structure with all required fields.
 
 	const response = await llm.generateStructuredOutput({
 		temperature: 0.1,
-		reasoning_effort: "medium",
+		reasoning_effort: "high",
 		response_format: zodResponseFormat(
 			jobPostingSchema.shape.jobInfo,
 			"job-info",
@@ -151,13 +171,18 @@ You are a senior job posting analyst specializing in structured data extraction.
 Given an image or html, extract 100% accurate job application form information in structured format.
 
 # Output Format
-Strictly follow the application-form structure with all required fields.
+- Return a single JSON array that validates against 'application-form' (jobPostingSchema.shape.applicationForm).
+- Do not include any extra text, explanations, or markdown/code fences.
 
-# Validation Criteria
-- All required fields must be identified
-- Questions must be clear and answerable
-- Field types must be correctly classified
-- Form structure must be complete
+# Extraction & Anti-hallucination Rules
+- Only include fields present in the source; do not invent questions or options.
+- Arrays: return [] when no items are found.
+- For field properties (e.g., 'required', 'defaultValue', 'placeholder') include them only if explicitly present or clearly derivable; otherwise omit.
+- For 'options', provide an empty array [] if no options are present for a selectable field.
+- Ensure field type classification is conservative and based on clear signals.
+
+# Validation
+- Your output must validate against jobPostingSchema.shape.applicationForm.
 `,
 		},
 		{
@@ -201,7 +226,18 @@ You are a senior job posting analyst specializing in structured data extraction.
 Given an image or html, extract 100% accurate company information in structured format.
 
 # Output Format
-Strictly follow the company-info structure with all required fields.
+- Return a single JSON object that validates against 'company-info' (jobPostingSchema.shape.companyInfo).
+- Do not include any extra text, explanations, or markdown/code fences.
+
+# Extraction & Anti-hallucination Rules
+- Only include information you can confidently extract from the provided content.
+- Strings: use empty string "" when applicable; otherwise omit optional fields.
+- Arrays: return [] when no items are found.
+- Enums with defaults (e.g., size buckets) should be left unspecified unless clearly indicated.
+- Prefer verbatim copying of the source text over paraphrasing when uncertain.
+
+# Validation
+- Your output must validate against jobPostingSchema.shape.companyInfo.
 `,
 		},
 		{
