@@ -52,10 +52,10 @@ tmux select-layout tiled
 # Pane 1.2: Top-Right (API)
 # Pane 1.3: Bottom-Left (Frontend)
 # Pane 1.4: Bottom-Right (Extension)
-# Pane 1.5: Right-hand CLI
+# Pane 1.5: Bottom CLI
 
 # Pane 1.1: Docker (always fresh: pull, rebuild without cache, then up)
-tmux send-keys -t $SESSION_NAME:1.1 'echo "Starting Docker (always fresh build)..." && docker compose pull && docker compose build --pull --no-cache && docker compose up --force-recreate --remove-orphans' C-m
+tmux send-keys -t $SESSION_NAME:1.1 'echo "Starting Docker..." && docker compose pull && docker compose build && docker compose up --force-recreate --remove-orphans' C-m
 
 # Pane 1.2: API Server
 tmux send-keys -t $SESSION_NAME:1.2 'cd packages/api && bun --env-file ../../.env --watch src/server.ts' C-m
