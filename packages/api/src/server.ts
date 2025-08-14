@@ -420,6 +420,43 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
+const getGeneratedResumeLatexSchema = {
+	querystring: z.object({
+		sessionId: z.string(),
+	}),
+};
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/generated-resume-latex",
+	schema: getGeneratedResumeLatexSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const [session] = await db
+			.select({
+				generatedResumeLatex: sessions.generatedResumeLatex,
+				status: sessions.sessionStatus,
+			})
+			.from(sessions)
+			.where(
+				and(
+					eq(sessions.userId, req.authSession.userId!),
+					eq(sessions.id, req.query.sessionId),
+				),
+			);
+
+		if (!session || session.status !== "done" || !session.generatedResumeLatex) {
+			reply.code(404).send({
+				error: "LaTeX resume not found or session not completed",
+			});
+			return;
+		}
+
+		reply.header("content-type", "text/plain");
+		reply.header("content-disposition", "attachment; filename=resume.tex");
+		return reply.send(session.generatedResumeLatex);
+	},
+});
+
 const putSessionJobStatusSchema = {
 	body: z.object({
 		jobStatus: z.enum(jobStatus),

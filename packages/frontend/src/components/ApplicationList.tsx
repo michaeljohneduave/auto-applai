@@ -21,6 +21,7 @@ import {
 	ClipboardList,
 	Download,
 	FileClock,
+	FileText,
 	FileUser,
 	Link2,
 	MoveDownLeft,
@@ -36,6 +37,7 @@ import { formatSmartDate } from "@/lib/date";
 import {
 	useDeleteSession,
 	useFetchResumePdf,
+	useFetchResumeLatex,
 	useFetchSessions,
 	useUpdateJobStatus,
 } from "../api";
@@ -54,6 +56,7 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 export default function ApplicationList() {
 	const fetchApplications = useFetchSessions();
 	const fetchResumePdf = useFetchResumePdf();
+	const fetchResumeLatex = useFetchResumeLatex();
 	const updateJobStatus = useUpdateJobStatus();
 	const deleteSession = useDeleteSession();
 	const queryClient = useQueryClient();
@@ -103,7 +106,7 @@ export default function ApplicationList() {
 	const handleAssetClick = useCallback(
 		async (
 			id: string,
-			type: "resume" | "cover-letter" | "answered-form" | "logs",
+			type: "resume" | "resume-latex" | "cover-letter" | "answered-form" | "logs",
 		) => {
 			const session = sessions.find((session) => session.id === id);
 
@@ -153,6 +156,23 @@ export default function ApplicationList() {
 
 					break;
 				}
+				case "resume-latex": {
+					const latexContent = await fetchResumeLatex(id);
+
+					setAsset({
+						id,
+						content: latexContent,
+						name: getResumeFileName(
+							session.personalInfo?.fullName ?? "",
+							session.companyInfo?.shortName ?? "",
+							session.jobInfo?.shortTitle ?? "",
+						).replace('.pdf', '.tex'),
+						source: "list",
+						type: "latex",
+					});
+
+					break;
+				}
 				case "logs":
 					setAsset({
 						id,
@@ -164,7 +184,7 @@ export default function ApplicationList() {
 					break;
 			}
 		},
-		[sessions, setAsset, fetchResumePdf],
+		[sessions, setAsset, fetchResumePdf, fetchResumeLatex],
 	);
 
 	const handleChangeJobStatus = useCallback(
@@ -304,16 +324,28 @@ export default function ApplicationList() {
 					}
 
 					return (
-						<div className="grid grid-cols-3 gap-2">
+						<div className="grid grid-cols-4 gap-2">
 							{session.assetPath && (
-								<Button
-									size="sm"
-									variant="ghost"
-									className="cursor-pointer hover:scale-125"
-									onClick={() => handleAssetClick(session.id, "resume")}
-								>
-									<FileUser />
-								</Button>
+								<>
+									<Button
+										size="sm"
+										variant="ghost"
+										className="cursor-pointer hover:scale-125"
+										onClick={() => handleAssetClick(session.id, "resume")}
+										title="View PDF Resume"
+									>
+										<FileUser />
+									</Button>
+									<Button
+										size="sm"
+										variant="ghost"
+										className="cursor-pointer hover:scale-125"
+										onClick={() => handleAssetClick(session.id, "resume-latex")}
+										title="View LaTeX Resume"
+									>
+										<FileText />
+									</Button>
+								</>
 							)}
 							{session.coverLetter && (
 								<Button

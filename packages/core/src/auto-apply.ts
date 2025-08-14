@@ -250,6 +250,11 @@ async function saveAssets(
 		`${assetPath}/application-details.json`,
 		JSON.stringify(applicationDetails),
 	);
+
+	// Save the LaTeX resume to the database
+	await updateSession(userId, sessionId, {
+		generatedResumeLatex: latexResume,
+	});
 }
 
 async function updateSession(
@@ -447,6 +452,7 @@ export async function runWithUrl(
 
 		await updateSession(userId, sessionId, {
 			assetPath,
+			generatedResumeLatex: latexResume,
 		});
 
 		let completedForm: z.infer<typeof formCompleterSchema> | null = null;

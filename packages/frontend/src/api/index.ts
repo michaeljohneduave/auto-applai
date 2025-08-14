@@ -68,6 +68,13 @@ export const useFetchResumePdf = () => {
 		apiClient.get(`/generated-resume?sessionId=${sessionId}`, "arraybuffer");
 };
 
+export const useFetchResumeLatex = () => {
+	const apiClient = useApiClient();
+
+	return (sessionId: GetSessionsResponse[number]["id"]): Promise<string> =>
+		apiClient.get(`/generated-resume-latex?sessionId=${sessionId}`, "text");
+};
+
 export const useUpdateAssetContent = (id: string) => {
 	const apiClient = useApiClient();
 	return async (content: string) => {
