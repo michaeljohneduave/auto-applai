@@ -8,6 +8,10 @@ export type SelectedItem = {
 	type: AssetType;
 	content: string;
 	name: string;
+	fileName?: string;
+	variantId?: string;
+	isDbVariant?: boolean;
+	score?: number | null;
 } | null;
 
 type UIContextType = {

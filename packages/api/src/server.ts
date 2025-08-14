@@ -12,21 +12,24 @@ import { checkRequiredServices } from "./services.ts";
 import { generatePdf } from "./utils.ts";
 
 import "./worker.ts";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { emitSessionUpdate, eventBus } from "@auto-apply/common/src/events.ts";
 import { db } from "@auto-apply/core/src/db/db.ts";
 import {
 	jobStatus,
+	logs,
+	resumeVariants,
 	type Sessions,
+	sessionHtml,
 	sessions,
 	type Users,
 	users,
 } from "@auto-apply/core/src/db/schema";
 import { queue } from "@auto-apply/core/src/utils/queue.ts";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, like, or, sql } from "drizzle-orm";
 import { toKebabCase } from "remeda";
 import { z } from "zod";
-import { emitSessionUpdate, eventBus } from "./events.ts";
 import { transformSessionLogs } from "./log-transformer";
 import { getModelPricing } from "./models-cache";
 
@@ -418,6 +421,299 @@ app.withTypeProvider<ZodTypeProvider>().route({
 
 		reply.header("content-type", "application/octet-stream");
 		return reply.send(Buffer.from(blob));
+	},
+});
+
+// List session assets (optionally filtered by extension)
+const getSessionAssetsSchema = {
+	params: z.object({
+		sessionId: z.string(),
+	}),
+	querystring: z.object({
+		ext: z.string().optional(),
+	}),
+};
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/sessions/:sessionId/assets",
+	schema: getSessionAssetsSchema,
+	preHandler: authHandler,
+	handler: async (req) => {
+		const session = await db.query.sessions.findFirst({
+			where: (s) =>
+				and(
+					eq(s.userId, req.authSession.userId!),
+					eq(s.id, req.params.sessionId),
+					isNull(s.deletedAt),
+				),
+		});
+
+		if (!session || !session.assetPath) {
+			return [] as Array<{
+				name: string;
+				type: string;
+				size: number;
+				updatedAt: number;
+			}>;
+		}
+
+		const assetDir = path.resolve(session.assetPath);
+		const entries: Dirent[] = await (await import("node:fs/promises")).readdir(
+			assetDir,
+			{ withFileTypes: true },
+		);
+		const extFilter = req.query.ext?.toLowerCase();
+		const files = entries.filter((e) => e.isFile());
+		const filtered = files.filter((f) =>
+			extFilter ? f.name.toLowerCase().endsWith(`.${extFilter}`) : true,
+		);
+
+		const results: Array<{
+			name: string;
+			type: string;
+			size: number;
+			updatedAt: number;
+		}> = [];
+		for (const f of filtered) {
+			const fullPath = path.join(assetDir, f.name);
+			const stat = await fs.stat(fullPath);
+			results.push({
+				name: f.name,
+				type: f.name.split(".").pop() || "",
+				size: stat.size,
+				updatedAt: stat.mtimeMs,
+			});
+		}
+
+		return results;
+	},
+});
+
+// Resume variants endpoints (DB-based)
+const getResumeVariantsSchema = {
+	params: z.object({ sessionId: z.string() }),
+};
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/sessions/:sessionId/latex-variants",
+	schema: getResumeVariantsSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const session = await db.query.sessions.findFirst({
+			where: (s) =>
+				and(
+					eq(s.userId, req.authSession.userId!),
+					eq(s.id, req.params.sessionId),
+					isNull(s.deletedAt),
+				),
+		});
+
+		if (!session) {
+			return reply.code(404).send({ error: "Session not found" });
+		}
+
+		const rows = await db
+			.select()
+			.from(resumeVariants)
+			.where(eq(resumeVariants.sessionId, req.params.sessionId))
+			.orderBy(resumeVariants.orderIndex);
+
+		// If no rows, return empty list (frontend will fallback to file-based)
+		const list = rows.map((r) => {
+			const baseName = toKebabCase(
+				[
+					session.personalInfo?.fullName || "",
+					session.companyInfo?.shortName || "",
+					"resume",
+				].join(" "),
+			);
+			const isBest = r.variantKey === "best" || r.orderIndex === 0;
+			const downloadFileName = isBest
+				? `${baseName}.pdf`
+				: `${baseName}-${r.name.replace(/\.tex$/i, "")}.pdf`;
+			return {
+				id: r.id,
+				name: r.name,
+				variantKey: r.variantKey,
+				orderIndex: r.orderIndex,
+				score: r.score ?? null,
+				downloadFileName,
+				isBest,
+			};
+		});
+
+		return list;
+	},
+});
+
+const getResumeVariantSchema = {
+	params: z.object({ sessionId: z.string(), variantId: z.string() }),
+};
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/sessions/:sessionId/latex-variants/:variantId",
+	schema: getResumeVariantSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const session = await db.query.sessions.findFirst({
+			where: (s) =>
+				and(
+					eq(s.userId, req.authSession.userId!),
+					eq(s.id, req.params.sessionId),
+					isNull(s.deletedAt),
+				),
+		});
+		if (!session) {
+			return reply.code(404).send({ error: "Session not found" });
+		}
+
+		const variant = await db.query.resumeVariants.findFirst({
+			where: (rv) =>
+				and(
+					eq(rv.id, req.params.variantId),
+					eq(rv.sessionId, req.params.sessionId),
+				),
+		});
+
+		if (!variant) {
+			return reply.code(404).send({ error: "Variant not found" });
+		}
+
+		return {
+			id: variant.id,
+			name: variant.name,
+			variantKey: variant.variantKey,
+			orderIndex: variant.orderIndex,
+			score: variant.score ?? null,
+			latex: variant.latex,
+			eval: variant.eval,
+		};
+	},
+});
+
+const putResumeVariantSchema = {
+	params: z.object({ sessionId: z.string(), variantId: z.string() }),
+	body: z.object({ latex: z.string() }),
+};
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "PUT",
+	url: "/sessions/:sessionId/latex-variants/:variantId",
+	schema: putResumeVariantSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const session = await db.query.sessions.findFirst({
+			where: (s) =>
+				and(
+					eq(s.userId, req.authSession.userId!),
+					eq(s.id, req.params.sessionId),
+					isNull(s.deletedAt),
+				),
+		});
+		if (!session) {
+			return reply.code(404).send({ error: "Session not found" });
+		}
+
+		await db
+			.update(resumeVariants)
+			.set({ latex: req.body.latex })
+			.where(
+				and(
+					eq(resumeVariants.id, req.params.variantId),
+					eq(resumeVariants.sessionId, req.params.sessionId),
+				),
+			);
+
+		return reply.send(200);
+	},
+});
+
+// Get or update a specific session asset content
+const sessionAssetContentSchema = {
+	params: z.object({ sessionId: z.string() }),
+	querystring: z.object({ name: z.string() }),
+};
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "GET",
+	url: "/sessions/:sessionId/assets/content",
+	schema: sessionAssetContentSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const session = await db.query.sessions.findFirst({
+			where: (s) =>
+				and(
+					eq(s.userId, req.authSession.userId!),
+					eq(s.id, req.params.sessionId),
+					isNull(s.deletedAt),
+				),
+		});
+
+		if (!session || !session.assetPath) {
+			return reply.code(404).send({ error: "Session assets not found" });
+		}
+
+		const assetDir = path.resolve(session.assetPath);
+		const requested = req.query.name;
+		const resolved = path.resolve(assetDir, requested);
+		if (!resolved.startsWith(assetDir + path.sep) && resolved !== assetDir) {
+			return reply.code(400).send({ error: "Invalid asset path" });
+		}
+
+		try {
+			const ext = path.extname(resolved).toLowerCase();
+
+			// Restrict viewing to .tex only
+			if (ext !== ".tex") {
+				return reply.code(400).send({ error: "Viewing limited to .tex files" });
+			}
+			const text = await fs.readFile(resolved, { encoding: "utf8" });
+			return { content: text, contentType: "text" };
+		} catch {
+			return reply.code(404).send({ error: "Asset not found" });
+		}
+	},
+});
+
+const updateSessionAssetContentSchema = {
+	params: z.object({ sessionId: z.string() }),
+	querystring: z.object({ name: z.string() }),
+	body: z.object({ content: z.string() }),
+};
+
+app.withTypeProvider<ZodTypeProvider>().route({
+	method: "PUT",
+	url: "/sessions/:sessionId/assets/content",
+	schema: updateSessionAssetContentSchema,
+	preHandler: authHandler,
+	handler: async (req, reply) => {
+		const session = await db.query.sessions.findFirst({
+			where: (s) =>
+				and(
+					eq(s.userId, req.authSession.userId!),
+					eq(s.id, req.params.sessionId),
+					isNull(s.deletedAt),
+				),
+		});
+
+		if (!session || !session.assetPath) {
+			return reply.code(404).send({ error: "Session assets not found" });
+		}
+
+		const assetDir = path.resolve(session.assetPath);
+		const requested = req.query.name;
+		const resolved = path.resolve(assetDir, requested);
+		if (!resolved.startsWith(assetDir + path.sep) && resolved !== assetDir) {
+			return reply.code(400).send({ error: "Invalid asset path" });
+		}
+
+		const ext = path.extname(resolved).toLowerCase();
+		// Restrict editing to .tex only
+		if (ext !== ".tex") {
+			return reply.code(400).send({ error: "Editing limited to .tex files" });
+		}
+
+		await fs.writeFile(resolved, req.body.content, { encoding: "utf8" });
+		return reply.send(200);
 	},
 });
 

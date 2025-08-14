@@ -11,11 +11,12 @@ import type {
 	formCompleterSchema,
 	jobPostingSchema,
 	personalInfoSchema,
+	resumeCritiqueSchema,
 } from "../schema";
 import type { SessionCost } from "../types";
 
 type RequestLog = ChatCompletionCreateParamsNonStreaming;
-type ResponseLog = ChatCompletion;
+type ResponseLog = ChatCompletion | null;
 
 const sessionStatus = [
 	"processing",
@@ -169,7 +170,26 @@ export const users = sqliteTable("users", {
 	baseResumeLatex: t.text("base_resume_latex").notNull(),
 });
 
+export const resumeVariants = sqliteTable("resume_variants", {
+	id: t.text().primaryKey(),
+	sessionId: t.text("session_id").notNull(),
+	variantKey: t.text("variant_key").notNull(),
+	orderIndex: t.integer("order_index", { mode: "number" }).notNull(),
+	name: t.text("name").notNull(),
+	latex: t.text("latex").notNull(),
+	eval: t
+		.text("eval", { mode: "json" })
+		.$type<z.infer<typeof resumeCritiqueSchema> | null>(),
+	// Note: storing score denormalized for easy sort/filter
+	score: t.integer("score", { mode: "number" }),
+	createdAt: t.integer({ mode: "number" }).default(sql`(unixepoch() * 1000)`),
+	updatedAt: t
+		.integer({ mode: "number" })
+		.$onUpdate(() => sql`(unixepoch() * 1000)`),
+});
+
 export type Sessions = InferSelectModel<typeof sessions>;
 export type Users = InferSelectModel<typeof users>;
 export type Logs = InferSelectModel<typeof logs>;
 export type SessionHtml = InferSelectModel<typeof sessionHtml>;
+export type ResumeVariant = InferSelectModel<typeof resumeVariants>;

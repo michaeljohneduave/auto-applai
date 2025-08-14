@@ -36,10 +36,10 @@ import * as R from "remeda";
 import { formatSmartDate } from "@/lib/date";
 import {
 	useDeleteSession,
-	useFetchResumePdf,
 	useFetchSessions,
 	useRetrySession,
 	useUpdateJobStatus,
+	useUpdateSessionNotes,
 } from "../api";
 import { useApiClient } from "../api/client";
 import { useUI } from "../contexts/UIContext";
@@ -47,6 +47,13 @@ import { useApplicationsTablePrefs } from "../stores/tablePrefs";
 import Spinner from "./Spinner";
 import StatusIcon from "./StatusIcon";
 import { Button } from "./ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "./ui/dialog";
 import { Input } from "./ui/input";
 
 // Skeleton component for loading states
@@ -56,9 +63,11 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 
 export default function ApplicationList() {
 	const fetchApplications = useFetchSessions();
-	const fetchResumePdf = useFetchResumePdf();
+
 	const updateJobStatus = useUpdateJobStatus();
 	const deleteSession = useDeleteSession();
+	const retrySession = useRetrySession();
+	const updateSessionNotes = useUpdateSessionNotes();
 	const queryClient = useQueryClient();
 	const { prefs, setPrefs, reset } = useApplicationsTablePrefs();
 
@@ -136,24 +145,29 @@ export default function ApplicationList() {
 					});
 					break;
 				case "resume": {
-					const pdfBlob = new Uint8Array(await fetchResumePdf(id));
-					let binary = "";
-
-					for (let i = 0; i < pdfBlob.byteLength; i++) {
-						binary += String.fromCharCode(pdfBlob[i]);
+					try {
+						// Prefer DB-backed variants; fallback to file-based resume.tex
+						const list = await apiClient.get(`/sessions/${id}/latex-variants`);
+						if (Array.isArray(list) && list.length > 0) {
+							const best = list[0];
+							const variant = await apiClient.get(
+								`/sessions/${id}/latex-variants/${best.id}`,
+							);
+							setAsset({
+								id,
+								content: variant.latex,
+								name: best.name,
+								fileName: best.downloadFileName,
+								source: "list",
+								type: "latex",
+								variantId: best.id,
+								isDbVariant: true,
+								score: best.score ?? null,
+							});
+						}
+					} catch (e) {
+						console.error("Failed to load latex variant", e);
 					}
-
-					setAsset({
-						id,
-						content: btoa(binary),
-						name: getResumeFileName(
-							session.personalInfo?.fullName ?? "",
-							session.companyInfo?.shortName ?? "",
-							session.jobInfo?.shortTitle ?? "",
-						),
-						source: "list",
-						type: "pdf",
-					});
 
 					break;
 				}
@@ -168,7 +182,7 @@ export default function ApplicationList() {
 					break;
 			}
 		},
-		[sessions, setAsset, fetchResumePdf],
+		[sessions, setAsset, apiClient],
 	);
 
 	const handleChangeJobStatus = useCallback(
@@ -563,7 +577,14 @@ export default function ApplicationList() {
 				size: 120,
 			},
 		],
-		[handleAssetClick, handleChangeJobStatus, handleDeleteSession, fuzzyFilter],
+		[
+			handleAssetClick,
+			handleChangeJobStatus,
+			handleDeleteSession,
+			handleRetrySession,
+			openNotes,
+			fuzzyFilter,
+		],
 	);
 
 	const table = useReactTable({

@@ -76,6 +76,52 @@ export const useUpdateAssetContent = (id: string) => {
 	};
 };
 
+// Session asset APIs
+export const useListSessionAssets = (sessionId: string) => {
+	const apiClient = useApiClient();
+	return (ext?: string) =>
+		apiClient.get(
+			`/sessions/${sessionId}/assets${ext ? `?ext=${encodeURIComponent(ext)}` : ""}`,
+		);
+};
+
+export const useFetchSessionAssetContent = (sessionId: string) => {
+	const apiClient = useApiClient();
+	return (name: string) =>
+		apiClient.get(
+			`/sessions/${sessionId}/assets/content?name=${encodeURIComponent(name)}`,
+		);
+};
+
+export const useUpdateSessionAssetContent = (sessionId: string) => {
+	const apiClient = useApiClient();
+	return (name: string, content: string) =>
+		apiClient.put(
+			`/sessions/${sessionId}/assets/content?name=${encodeURIComponent(name)}`,
+			{ content },
+		);
+};
+
+// DB-backed resume variant APIs
+export const useListLatexVariants = (sessionId: string) => {
+	const apiClient = useApiClient();
+	return () => apiClient.get(`/sessions/${sessionId}/latex-variants`);
+};
+
+export const useGetLatexVariant = (sessionId: string) => {
+	const apiClient = useApiClient();
+	return (variantId: string) =>
+		apiClient.get(`/sessions/${sessionId}/latex-variants/${variantId}`);
+};
+
+export const useUpdateLatexVariant = (sessionId: string) => {
+	const apiClient = useApiClient();
+	return (variantId: string, latex: string) =>
+		apiClient.put(`/sessions/${sessionId}/latex-variants/${variantId}`, {
+			latex,
+		});
+};
+
 export const useUpdateJobStatus = () => {
 	const apiClient = useApiClient();
 	return (sessionId: string, body: PutSessionJobStatusBody) =>

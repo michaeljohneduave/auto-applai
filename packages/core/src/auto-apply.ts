@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import { and, eq } from "drizzle-orm";
+import { emitSessionUpdate } from "@auto-apply/common";
+import { and, eq, sql } from "drizzle-orm";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 import { toKebabCase } from "remeda";
@@ -7,7 +9,13 @@ import type { z } from "zod";
 import { llmFormCrawler } from "../src/crawler.ts";
 import { generateResume } from "../src/generateResume.ts";
 import { db } from "./db/db.ts";
-import { type Sessions, sessions, users } from "./db/schema.ts";
+import {
+	resumeVariants,
+	type Sessions,
+	sessionHtml,
+	sessions,
+	users,
+} from "./db/schema.ts";
 import { extractInfo } from "./extractInfo.ts";
 import { formCompleter } from "./formCompletion.ts";
 import LLM, { GEMINI_25_FLASH, GEMINI_25_FLASH_LITE } from "./llm.ts";
@@ -210,6 +218,7 @@ async function saveAssets(
 	latexPdf: ArrayBuffer,
 	generatedResumes: string[],
 	generatedEvals: z.infer<typeof resumeCritiqueSchema>[],
+	lesserLatexResumes: string[],
 ) {
 	const companyName = applicationDetails.companyInfo.name.replace(" ", "-");
 	const assetPath = `assets/sessions/${userId}/${companyName}/${sessionId}-${isoFileSuffixUTC(
@@ -246,6 +255,13 @@ async function saveAssets(
 		);
 	}
 
+	for (let i = 0; i < lesserLatexResumes.length; i++) {
+		await fs.writeFile(
+			`${assetPath}/lesser-latex-resume-${i + 1}.tex`,
+			lesserLatexResumes[i],
+		);
+	}
+
 	await fs.writeFile(
 		`${assetPath}/application-details.json`,
 		JSON.stringify(applicationDetails),
@@ -278,6 +294,11 @@ async function updateSession(
 		.update(sessions)
 		.set(setObj)
 		.where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId)));
+
+	emitSessionUpdate({
+		userId,
+		sessionId,
+	});
 
 	if (options.shouldReturn) {
 		return await op.returning().then((res) => res[0]);
@@ -648,11 +669,14 @@ export async function runWithHtml(
 				currentStep: "generating_latex",
 			});
 
-			const latexResume = await latexResumeGenerator(
-				latexReferenceResume,
-				adjustedResume,
-				sessionId,
-			);
+			const [latexResume, ...lesserLatexResumes] = await Promise.all([
+				latexResumeGenerator(latexReferenceResume, adjustedResume, sessionId),
+				...generatedResumes
+					.filter((resume) => resume !== adjustedResume)
+					.map((resume) =>
+						latexResumeGenerator(latexReferenceResume, resume, sessionId),
+					),
+			]);
 
 			await updateSession(userId, sessionId, {
 				currentStep: "generating_pdf",
@@ -684,7 +708,56 @@ export async function runWithHtml(
 				latexPdf,
 				generatedResumes,
 				generatedEvals,
+				lesserLatexResumes,
 			);
+
+			// Persist resume variants in DB (no backfill for old sessions)
+			try {
+				// Determine best index by matching adjustedResume to generatedResumes
+				const bestIndex = generatedResumes.findIndex(
+					(r) => r === adjustedResume,
+				);
+				// Insert best variant
+				const bestEval = bestIndex >= 0 ? generatedEvals[bestIndex] : undefined;
+				await db.insert(resumeVariants).values({
+					id: randomUUID(),
+					sessionId,
+					variantKey: "best",
+					orderIndex: 0,
+					name: "resume.tex",
+					latex: latexResume,
+					eval: bestEval || null,
+					score:
+						bestEval?.overallGutCheck?.tailoringScore !== undefined
+							? Math.round(bestEval.overallGutCheck.tailoringScore)
+							: null,
+				});
+
+				// Build mapping for lesser variants: generatedResumes minus best, preserving order
+				const remainingIndexes: number[] = generatedResumes
+					.map((_, idx) => idx)
+					.filter((idx) => idx !== bestIndex);
+
+				for (let i = 0; i < lesserLatexResumes.length; i++) {
+					const idx = remainingIndexes[i];
+					const ev = idx !== undefined ? generatedEvals[idx] : undefined;
+					await db.insert(resumeVariants).values({
+						id: randomUUID(),
+						sessionId,
+						variantKey: `lesser-${i + 1}`,
+						orderIndex: i + 1,
+						name: `lesser-latex-resume-${i + 1}.tex`,
+						latex: lesserLatexResumes[i],
+						eval: ev || null,
+						score:
+							ev?.overallGutCheck?.tailoringScore !== undefined
+								? Math.round(ev.overallGutCheck.tailoringScore)
+								: null,
+					});
+				}
+			} catch (e) {
+				console.error("Failed to persist resume variants:", e);
+			}
 
 			await updateSession(userId, sessionId, {
 				assetPath,

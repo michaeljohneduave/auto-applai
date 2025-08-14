@@ -12,7 +12,13 @@ import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type z from "zod";
 import { cn } from "@/lib/utils";
-import { useGeneratePdf, useMutateBaseAssets } from "../api";
+import {
+	useGeneratePdf,
+	useGetLatexVariant,
+	useListLatexVariants,
+	useMutateBaseAssets,
+	useUpdateLatexVariant,
+} from "../api";
 import { useUI } from "../contexts/UIContext";
 import ApplicationForm from "./ApplicationForm";
 import SessionLogsViewer from "./SessionLogsViewer";
@@ -34,6 +40,19 @@ export default function AssetDisplayDialog() {
 	const mutateBaseAssets = useMutateBaseAssets();
 	const generatePdf = useGeneratePdf();
 
+	// Session LaTeX variants support (DB only)
+	const listLatexVariants = useListLatexVariants(selected?.id || "");
+	const getLatexVariant = useGetLatexVariant(selected?.id || "");
+	const updateLatexVariant = useUpdateLatexVariant(selected?.id || "");
+	const [sessionLatexFiles, setSessionLatexFiles] = useState<
+		Array<{
+			id: string;
+			name: string;
+			score: number | null;
+			downloadFileName?: string;
+		}>
+	>([]);
+
 	const [editorView, setEditorView] = useState<EditorView | null>(null);
 	const [isDirty, setIsDirty] = useState(false);
 
@@ -52,6 +71,14 @@ export default function AssetDisplayDialog() {
 			await queryClient.fetchQuery({ queryKey: ["baseAssets"] });
 			setIsDirty(false);
 		},
+	});
+
+	// Save DB variant only
+	const { mutate: saveDbVariant, isPending: isSavingDbVariant } = useMutation({
+		mutationFn: async (params: { variantId: string; latex: string }) => {
+			return updateLatexVariant(params.variantId, params.latex);
+		},
+		onSuccess: () => setIsDirty(false),
 	});
 
 	const { mutate: getPdf, isPending: getPdfPending } = useMutation({
@@ -78,6 +105,35 @@ export default function AssetDisplayDialog() {
 
 		setIsDirty(false);
 	}, [selected]);
+
+	// Load variants (DB only)
+	useEffect(() => {
+		(async () => {
+			if (
+				selected?.source === "list" &&
+				selected?.type === "latex" &&
+				selected?.id
+			) {
+				try {
+					const variants = await listLatexVariants();
+					const names = Array.isArray(variants)
+						? variants.map((v: any) => ({
+								id: v.id,
+								name: v.name,
+								score: typeof v.score === "number" ? v.score : null,
+								downloadFileName: v.downloadFileName,
+							}))
+						: [];
+					setSessionLatexFiles(names);
+				} catch (e) {
+					console.error("Failed to load session latex files", e);
+				}
+			} else {
+				setSessionLatexFiles([]);
+			}
+		})();
+		// Important: avoid including function identities to prevent infinite loops
+	}, [selected?.id, selected?.source, selected?.type]);
 
 	useEffect(() => {
 		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -119,15 +175,26 @@ export default function AssetDisplayDialog() {
 		if (!isDirty || !selected) {
 			return;
 		}
-		const { id } = selected;
-		const key =
-			id === "base-resume.md"
-				? "baseResumeMd"
-				: id === "personal-info.md"
-					? "personalInfoMd"
-					: "baseResumeLatex";
-		saveBaseAssets({ [key]: content });
-	}, [isDirty, selected, content, saveBaseAssets]);
+		// Save user base assets
+		if (selected.source === "base") {
+			const { id } = selected;
+			const key =
+				id === "base-resume.md"
+					? "baseResumeMd"
+					: id === "personal-info.md"
+						? "personalInfoMd"
+						: "baseResumeLatex";
+			saveBaseAssets({ [key]: content });
+			return;
+		}
+
+		// Save session-scoped LaTeX only (DB only)
+		if (selected.source === "list" && selected.type === "latex") {
+			if (selected.isDbVariant && selected.variantId) {
+				saveDbVariant({ variantId: selected.variantId, latex: content });
+			}
+		}
+	}, [isDirty, selected, content, saveBaseAssets, saveDbVariant]);
 
 	const handleReset = () => {
 		setContent(selected?.content || "");
@@ -205,6 +272,14 @@ export default function AssetDisplayDialog() {
 	const renderContent = () => {
 		const extensions = getExtensions(selected.type, wordWrap);
 
+		const computePdfFileName = () => {
+			if (selected?.fileName) {
+				const base = selected.fileName.replace(/\.pdf$/i, "");
+				return `${base}.pdf`;
+			}
+			return "resume.pdf";
+		};
+
 		switch (selected.type) {
 			case "md":
 				return (
@@ -251,14 +326,11 @@ export default function AssetDisplayDialog() {
 									/>
 									<Button
 										onClick={() =>
-											handleDownloadPdf(
-												derivedContent,
-												`${selected.name.replace(".tex", ".pdf")}`,
-											)
+											handleDownloadPdf(derivedContent, computePdfFileName())
 										}
 										variant="outline"
-										size="sm"
-										className="absolute top-2 right-2 z-10"
+										size="lg"
+										className="absolute top-2 right-2 z-10 cursor-pointer"
 									>
 										<Download className="w-4 h-4 mr-2" />
 										Download
@@ -312,6 +384,11 @@ export default function AssetDisplayDialog() {
 		}
 	};
 
+	const canShowFooter =
+		(selected.type === "md" || selected.type === "latex") &&
+		(selected.source === "base" ||
+			(selected.source === "list" && selected.type === "latex"));
+
 	return (
 		<Dialog
 			open={Boolean(selected)}
@@ -322,8 +399,55 @@ export default function AssetDisplayDialog() {
 					<div className="flex items-center gap-4">
 						<DialogTitle>
 							{selected.name}
+							{typeof selected.score === "number" ? (
+								<span className="ml-2 text-sm text-muted-foreground">
+									({selected.score})
+								</span>
+							) : null}
 							{isDirty && <span className="text-destructive ml-2">*</span>}
 						</DialogTitle>
+						{selected.source === "list" &&
+						selected.type === "latex" &&
+						sessionLatexFiles.length > 0 ? (
+							<select
+								className="border rounded px-2 py-1 text-sm"
+								value={selected.name}
+								onChange={async (e) => {
+									const nextName = e.target.value;
+									try {
+										const match = sessionLatexFiles.find(
+											(v) => v.name === nextName,
+										);
+										if (match) {
+											const variant = await getLatexVariant(match.id);
+											setContent(variant.latex || "");
+											setIsDirty(false);
+											setDerivedContent(null);
+											setAsset({
+												id: selected.id,
+												content: variant.latex || "",
+												name: nextName,
+												fileName: match.downloadFileName,
+												source: "list",
+												type: "latex",
+												variantId: match.id,
+												isDbVariant: true,
+												score: match.score ?? null,
+											});
+										}
+									} catch (err) {
+										console.error("Failed to switch latex variant", err);
+									}
+								}}
+							>
+								{sessionLatexFiles.map((v) => (
+									<option key={v.id} value={v.name}>
+										{v.name}
+										{typeof v.score === "number" ? ` (${v.score})` : ""}
+									</option>
+								))}
+							</select>
+						) : null}
 						<Button
 							onClick={() => setWordWrap(!wordWrap)}
 							variant="outline"
@@ -347,13 +471,16 @@ export default function AssetDisplayDialog() {
 					</div>
 				</DialogHeader>
 				<div className="flex-1 overflow-y-auto flex">{renderContent()}</div>
-				{selected.type === "md" || selected.type === "latex" ? (
+				{canShowFooter ? (
 					<DialogFooter>
 						<Button variant="outline" onClick={handleReset} disabled={!isDirty}>
 							Reset
 						</Button>
-						<Button onClick={handleSave} disabled={!isDirty || isPending}>
-							{isPending ? "Saving..." : "Save"}
+						<Button
+							onClick={handleSave}
+							disabled={!isDirty || isPending || isSavingDbVariant}
+						>
+							{isPending || isSavingDbVariant ? "Saving..." : "Save"}
 						</Button>
 					</DialogFooter>
 				) : null}
