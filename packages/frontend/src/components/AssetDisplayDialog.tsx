@@ -36,6 +36,7 @@ export default function AssetDisplayDialog() {
 	const [wordWrap, setWordWrap] = useState(true);
 	const [content, setContent] = useState(selected?.content || "");
 	const [derivedContent, setDerivedContent] = useState(null);
+	const [isAutoGenerating, setIsAutoGenerating] = useState(false);
 	const queryClient = useQueryClient();
 	const mutateBaseAssets = useMutateBaseAssets();
 	const generatePdf = useGeneratePdf();
@@ -103,8 +104,37 @@ export default function AssetDisplayDialog() {
 			setDerivedContent(JSON.parse(selected.content));
 		}
 
+		// Auto-generate PDF for session resumes
+		if (
+			selected?.source === "list" &&
+			selected?.type === "latex" &&
+			!derivedContent
+		) {
+			setIsAutoGenerating(true);
+			getPdf(
+				{ latex: selected.content },
+				{
+					onSuccess: (data) => {
+						if (data instanceof ArrayBuffer) {
+							const base64 = btoa(
+								new Uint8Array(data).reduce(
+									(data, byte) => data + String.fromCharCode(byte),
+									"",
+								),
+							);
+							setDerivedContent(base64);
+						}
+						setIsAutoGenerating(false);
+					},
+					onError: () => {
+						setIsAutoGenerating(false);
+					},
+				},
+			);
+		}
+
 		setIsDirty(false);
-	}, [selected]);
+	}, [selected, derivedContent, getPdf]);
 
 	// Load variants (DB only)
 	useEffect(() => {
@@ -162,6 +192,12 @@ export default function AssetDisplayDialog() {
 		} else {
 			setAsset(null);
 		}
+
+		setContent("");
+		setDerivedContent(null);
+		setIsDirty(false);
+		setIsAutoGenerating(false);
+		setEditorView(null);
 	};
 
 	const handleEditorChange = (value) => {
@@ -194,7 +230,13 @@ export default function AssetDisplayDialog() {
 				saveDbVariant({ variantId: selected.variantId, latex: content });
 			}
 		}
-	}, [isDirty, selected, content, saveBaseAssets, saveDbVariant]);
+
+		if (selected.type === "latex") {
+			getPdf({
+				latex: content,
+			});
+		}
+	}, [isDirty, selected, content, saveBaseAssets, saveDbVariant, getPdf]);
 
 	const handleReset = () => {
 		setContent(selected?.content || "");
@@ -217,6 +259,11 @@ export default function AssetDisplayDialog() {
 
 	const handleDownloadPdf = (content: string, filename?: string) => {
 		if (!content) return;
+
+		if (isDirty) {
+			window.alert("You have unsaved changes. Please save before downloading.");
+			return;
+		}
 
 		// Create a blob from the base64 data
 		const byteCharacters = atob(content);
@@ -336,6 +383,15 @@ export default function AssetDisplayDialog() {
 										Download
 									</Button>
 								</>
+							) : isAutoGenerating ? (
+								<div className="flex flex-1 justify-center items-center bg-gray-50">
+									<div className="flex flex-col items-center gap-2">
+										<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+										<span className="text-lg text-gray-600">
+											Generating PDF...
+										</span>
+									</div>
+								</div>
 							) : (
 								<div className="flex flex-1 justify-center items-center bg-gray-50">
 									<span className="text-2xl">
@@ -409,44 +465,80 @@ export default function AssetDisplayDialog() {
 						{selected.source === "list" &&
 						selected.type === "latex" &&
 						sessionLatexFiles.length > 0 ? (
-							<select
-								className="border rounded px-2 py-1 text-sm"
-								value={selected.name}
-								onChange={async (e) => {
-									const nextName = e.target.value;
-									try {
-										const match = sessionLatexFiles.find(
-											(v) => v.name === nextName,
-										);
-										if (match) {
-											const variant = await getLatexVariant(match.id);
-											setContent(variant.latex || "");
-											setIsDirty(false);
-											setDerivedContent(null);
-											setAsset({
-												id: selected.id,
-												content: variant.latex || "",
-												name: nextName,
-												fileName: match.downloadFileName,
-												source: "list",
-												type: "latex",
-												variantId: match.id,
-												isDbVariant: true,
-												score: match.score ?? null,
-											});
-										}
-									} catch (err) {
-										console.error("Failed to switch latex variant", err);
+							<div className="flex items-center gap-2">
+								<select
+									className={cn("border rounded px-2 py-1 text-sm", {
+										"opacity-50 cursor-not-allowed": isAutoGenerating,
+									})}
+									value={selected.name}
+									disabled={isAutoGenerating}
+									title={
+										isAutoGenerating ? "Generating PDF..." : "Select variant"
 									}
-								}}
-							>
-								{sessionLatexFiles.map((v) => (
-									<option key={v.id} value={v.name}>
-										{v.name}
-										{typeof v.score === "number" ? ` (${v.score})` : ""}
-									</option>
-								))}
-							</select>
+									onChange={async (e) => {
+										const nextName = e.target.value;
+										try {
+											const match = sessionLatexFiles.find(
+												(v) => v.name === nextName,
+											);
+											if (match) {
+												const variant = await getLatexVariant(match.id);
+												setContent(variant.latex || "");
+												setIsDirty(false);
+												setDerivedContent(null);
+
+												// Auto-generate PDF for the new variant
+												setIsAutoGenerating(true);
+												getPdf(
+													{ latex: variant.latex || "" },
+													{
+														onSuccess: (data) => {
+															if (data instanceof ArrayBuffer) {
+																const base64 = btoa(
+																	new Uint8Array(data).reduce(
+																		(data, byte) =>
+																			data + String.fromCharCode(byte),
+																		"",
+																	),
+																);
+																setDerivedContent(base64);
+															}
+															setIsAutoGenerating(false);
+														},
+														onError: () => {
+															setIsAutoGenerating(false);
+														},
+													},
+												);
+
+												setAsset({
+													id: selected.id,
+													content: variant.latex || "",
+													name: nextName,
+													fileName: match.downloadFileName,
+													source: "list",
+													type: "latex",
+													variantId: match.id,
+													isDbVariant: true,
+													score: match.score ?? null,
+												});
+											}
+										} catch (err) {
+											console.error("Failed to switch latex variant", err);
+										}
+									}}
+								>
+									{sessionLatexFiles.map((v) => (
+										<option key={v.id} value={v.name}>
+											{v.name}
+											{typeof v.score === "number" ? ` (${v.score})` : ""}
+										</option>
+									))}
+								</select>
+								{isAutoGenerating && (
+									<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+								)}
+							</div>
 						) : null}
 						<Button
 							onClick={() => setWordWrap(!wordWrap)}
@@ -463,9 +555,9 @@ export default function AssetDisplayDialog() {
 								size="sm"
 								className="h-7 cursor-pointer"
 								onClick={handleGeneratePdf}
-								disabled={getPdfPending}
+								disabled={getPdfPending || isAutoGenerating}
 							>
-								{getPdfPending ? "Generating" : "Generate"}
+								{getPdfPending || isAutoGenerating ? "Generating" : "Generate"}
 							</Button>
 						) : null}
 					</div>
