@@ -45,6 +45,7 @@ import {
 import { useApiClient } from "../api/client";
 import { useUI } from "../contexts/UIContext";
 import { useApplicationsTablePrefs } from "../stores/tablePrefs";
+import JobStatusBadge from "./JobStatusBadge";
 import Spinner from "./Spinner";
 import StatusIcon from "./StatusIcon";
 import { Button } from "./ui/button";
@@ -528,38 +529,16 @@ export default function ApplicationList() {
 				header: "Job Status",
 				accessorFn: (row) => row.jobStatus,
 				cell: ({ row }) => (
-					<select
-						className="border rounded px-2 py-1 text-sm"
-						value={row.original.jobStatus}
-						onChange={(e) =>
-							handleChangeJobStatus(
-								row.original.id,
-								e.target.value as Sessions["jobStatus"],
-							)
+					<JobStatusBadge
+						status={row.original.jobStatus}
+						onStatusChange={(newStatus) =>
+							handleChangeJobStatus(row.original.id, newStatus)
 						}
-					>
-						<option
-							value="in_progress"
-							disabled={row.original.jobStatus === "in_progress"}
-						>
-							Processing
-						</option>
-						<option
-							value="applied"
-							disabled={row.original.jobStatus === "applied"}
-						>
-							Applied
-						</option>
-						<option
-							value="not_applied"
-							disabled={row.original.jobStatus === "not_applied"}
-						>
-							Not applied
-						</option>
-					</select>
+						disabled={row.original.sessionStatus === "processing"}
+					/>
 				),
 				enableSorting: false,
-				size: 150,
+				size: 160,
 			},
 			{
 				id: "actions",
@@ -828,7 +807,7 @@ export default function ApplicationList() {
 						</div>
 					</div>
 				)}
-				<table className="w-full text-left">
+				<table className="w-full text-left text-xs">
 					<thead className="sticky top-0 z-10 bg-white">
 						{table.getHeaderGroups().map((headerGroup) => (
 							<tr key={headerGroup.id}>
