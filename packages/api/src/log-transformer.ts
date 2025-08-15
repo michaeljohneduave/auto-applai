@@ -36,6 +36,7 @@ export interface WorkflowStep {
 export interface LogEntry {
 	id: number;
 	timestamp: number;
+	llmName: string;
 	model: string;
 	duration: number;
 	cost: number;
@@ -236,6 +237,7 @@ export async function transformSessionLogs(
 				return {
 					id: log.id,
 					timestamp: log.createdAt || 0,
+					llmName: log.llmName || "",
 					model,
 					duration: log.duration,
 					cost,

@@ -142,7 +142,7 @@ export default function ApplicationList() {
 					setAsset({
 						content: JSON.stringify(session.answeredForm),
 						id: session.id,
-						name: "answered-form",
+						name: "Answered Form",
 						source: "list",
 						type: "form",
 					});
@@ -151,7 +151,7 @@ export default function ApplicationList() {
 					setAsset({
 						content: session.coverLetter,
 						id: session.id,
-						name: "coverLetter",
+						name: "Cover Letter",
 						source: "list",
 						type: "md",
 					});
@@ -187,7 +187,7 @@ export default function ApplicationList() {
 					setAsset({
 						id,
 						content: "", // We'll use the SessionLogsViewer component instead
-						name: "sessionLogs",
+						name: "Session Logs",
 						source: "list",
 						type: "logs", // New type for logs
 					});

@@ -545,7 +545,7 @@ export default function AssetDisplayDialog() {
 							variant="outline"
 							size="sm"
 							className={cn("h-7 cursor-pointer", {
-								hidden: selected.type === "form",
+								hidden: selected.type === "form" || selected.type === "logs",
 							})}
 						>
 							{wordWrap ? "Unwrap" : "Wrap"}

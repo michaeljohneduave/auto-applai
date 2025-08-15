@@ -119,9 +119,9 @@ export default function SessionLogsViewer({
 	};
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6 w-full">
 			{/* Summary Card */}
-			<Card>
+			<Card className="bg-gray-50">
 				<CardHeader>
 					<CardTitle className="flex items-center justify-between">
 						<span>Session Summary</span>
@@ -241,7 +241,7 @@ export default function SessionLogsViewer({
 												>
 													<div className="flex justify-between items-start mb-2">
 														<div className="text-sm font-medium">
-															{log.model}
+															{log.llmName} ({log.model})
 														</div>
 														<div className="text-xs text-gray-500 space-x-2">
 															<span>{formatTimestamp(log.timestamp)}</span>
