@@ -41,7 +41,7 @@
 		"host_permissions": [
 			"$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
 			"$CLERK_FRONTEND_API/*",
-			"http://localhost:5500/*"
+			"$PLASMO_PUBLIC_API_URL/*"
 		],
 		"background": {
 			"service_worker": "background/index.ts"

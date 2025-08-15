@@ -2,7 +2,7 @@ import { createClerkClient } from "@clerk/chrome-extension/background";
 import type { BackgroundMessage } from "~types";
 
 const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
+const apiUrl = process.env.PLASMO_PUBLIC_API_URL;
 if (!publishableKey) {
 	throw new Error(
 		"Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file",
@@ -155,20 +155,17 @@ chrome.runtime.onMessage.addListener(
 					}
 
 					try {
-						const response = await fetch(
-							"http://localhost:5500/extension-scrape",
-							{
-								method: "POST",
-								headers: {
-									"Content-Type": "application/json",
-								},
-								body: JSON.stringify({
-									html: message.html,
-									url: message.url,
-									userId: message.userId,
-								}),
+						const response = await fetch(`${apiUrl}/extension-scrape`, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
 							},
-						);
+							body: JSON.stringify({
+								html: message.html,
+								url: message.url,
+								userId: message.userId,
+							}),
+						});
 
 						const result = await response.json();
 						sendResponse({ success: response.ok, data: result });
@@ -200,21 +197,18 @@ chrome.runtime.onMessage.addListener(
 					}
 
 					try {
-						const response = await fetch(
-							"http://localhost:5500/extension-scrape",
-							{
-								method: "POST",
-								headers: {
-									"Content-Type": "application/json",
-								},
-								body: JSON.stringify({
-									html: message.html,
-									url: message.url,
-									userId: message.userId,
-									forceNew: true,
-								}),
+						const response = await fetch(`${apiUrl}/extension-scrape`, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
 							},
-						);
+							body: JSON.stringify({
+								html: message.html,
+								url: message.url,
+								userId: message.userId,
+								forceNew: true,
+							}),
+						});
 
 						const result = await response.json();
 						sendResponse({ success: response.ok, data: result });
@@ -247,7 +241,7 @@ chrome.runtime.onMessage.addListener(
 
 					try {
 						const response = await fetch(
-							`http://localhost:5500/sessions/by-url?url=${encodeURIComponent(message.url)}`,
+							`${apiUrl}/sessions/by-url?url=${encodeURIComponent(message.url)}`,
 						);
 
 						if (response.ok) {
@@ -288,7 +282,7 @@ chrome.runtime.onMessage.addListener(
 
 					try {
 						const response = await fetch(
-							`http://localhost:5500/generated-resume?sessionId=${message.sessionId}`,
+							`${apiUrl}/generated-resume?sessionId=${message.sessionId}`,
 							{
 								method: "GET",
 								headers: {
@@ -356,7 +350,7 @@ chrome.runtime.onMessage.addListener(
 
 					try {
 						const response = await fetch(
-							`http://localhost:5500/generated-resume?sessionId=${message.sessionId}`,
+							`${apiUrl}/generated-resume?sessionId=${message.sessionId}`,
 							{
 								method: "GET",
 								headers: {

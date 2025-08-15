@@ -15,7 +15,7 @@ import "~style.css";
 const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const SYNC_HOST = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST;
 const EXTENSION_URL = chrome.runtime.getURL(".");
-const FRONTEND_URL = "http://localhost:5175";
+const FRONTEND_URL = process.env.PLASMO_PUBLIC_FRONTEND_URL;
 
 if (!PUBLISHABLE_KEY || !SYNC_HOST) {
 	throw new Error(
