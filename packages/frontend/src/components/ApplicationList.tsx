@@ -1,6 +1,6 @@
 import type { GetSessionsResponse } from "@auto-apply/api/src/server.ts";
 import { getResumeFileName } from "@auto-apply/common/src/utils";
-import type { Sessions } from "@auto-apply/core/src/db/schema";
+import type { Sessions } from "@auto-apply/core/src/types";
 import { rankItem } from "@tanstack/match-sorter-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {

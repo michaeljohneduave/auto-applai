@@ -1,5 +1,12 @@
-import type { Sessions } from "@auto-apply/core/src/db/schema";
-import { CheckCircle, ClipboardList, FileText, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
+import type { Sessions } from "@auto-apply/core/src/types";
+import {
+	CheckCircle,
+	ChevronDown,
+	ChevronRight,
+	ClipboardList,
+	FileText,
+	HelpCircle,
+} from "lucide-react";
 import { useState } from "react";
 
 export default function ApplicationForm({
@@ -7,7 +14,9 @@ export default function ApplicationForm({
 }: {
 	form: Sessions["answeredForm"];
 }) {
-	const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(new Set());
+	const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(
+		new Set(),
+	);
 
 	const toggleAnswer = (index: number) => {
 		const newExpanded = new Set(expandedAnswers);
@@ -79,7 +88,7 @@ export default function ApplicationForm({
 							<div className="space-y-4">
 								{form.clarificationRequests.map((request, index) => (
 									<div
-										key={index}
+										key={`clarification-${request.originalQuestion.slice(0, 20)}-${index}`}
 										className="p-4 border border-orange-200 rounded-lg bg-orange-50"
 									>
 										<div className="space-y-2">
@@ -133,10 +142,11 @@ export default function ApplicationForm({
 				<div className="space-y-4">
 					{form.formAnswers.map((answer, index) => {
 						const isExpanded = expandedAnswers.has(index);
-						const answerPreview = answer.answer.length > 100 
-							? `${answer.answer.slice(0, 100)}...` 
-							: answer.answer;
-						
+						const answerPreview =
+							answer.answer.length > 100
+								? `${answer.answer.slice(0, 100)}...`
+								: answer.answer;
+
 						return (
 							<div
 								key={`answer-${index}-${answer.question.slice(0, 20)}`}
@@ -162,7 +172,7 @@ export default function ApplicationForm({
 											<div className="flex items-center gap-1">
 												{Array.from({ length: 10 }, (_, i) => (
 													<div
-														key={i}
+														key={`confidence-${answer.question}`}
 														className={`w-1.5 h-1.5 rounded-full ${
 															i < answer.confidence
 																? "bg-green-400"
@@ -187,11 +197,13 @@ export default function ApplicationForm({
 											</p>
 											{answer.confidence && (
 												<div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-													<span className="text-xs text-gray-500">Confidence:</span>
+													<span className="text-xs text-gray-500">
+														Confidence:
+													</span>
 													<div className="flex gap-1">
 														{Array.from({ length: 10 }, (_, i) => (
 															<div
-																key={i}
+																key={`confidence-${answer.question}`}
 																className={`w-2 h-2 rounded-full ${
 																	i < answer.confidence
 																		? "bg-green-400"

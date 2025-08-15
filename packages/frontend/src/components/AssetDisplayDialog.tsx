@@ -1,4 +1,4 @@
-import type { formCompleterSchema } from "@auto-apply/core/src/schema";
+import type { formCompleterSchema } from "@auto-apply/core/src/types";
 import { markdown } from "@codemirror/lang-markdown";
 // import { StreamLanguage } from "@codemirror/language";
 // import { stex } from "@codemirror/legacy-modes/mode/stex";

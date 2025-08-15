@@ -1,4 +1,4 @@
-import type { Sessions } from "@auto-apply/core/src/db/schema";
+import type { Sessions } from "@auto-apply/core/src/types";
 import {
 	CheckCircle,
 	ChevronDown,
