@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
-// import { Document, Page, pdfjs } from "react-pdf";
-// import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-// import "react-pdf/dist/esm/Page/TextLayer.css";
 import { useFetchAssetContent, useUpdateAssetContent } from "../api";
 import { useUI } from "../contexts/UIContext";
 import Spinner from "./Spinner";
