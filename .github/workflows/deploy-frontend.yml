@@ -1,0 +1,51 @@
+name: Deploy Frontend to Cloudflare Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'packages/frontend/**' ]
+  workflow_dispatch:
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 8
+        
+    - name: Install dependencies
+      run: pnpm install
+      
+    - name: Build frontend
+      run: |
+        cd packages/frontend
+        pnpm build
+      env:
+        VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+        
+    - name: Deploy to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        projectName: auto-apply
+        directory: packages/frontend/dist
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Verify deployment
+      run: |
+        echo "✅ Frontend deployed to Cloudflare Pages"
+        echo "🌐 URL: https://auto-apply.pages.dev"
+        echo "📱 API URL: ${{ secrets.VITE_API_URL }}"

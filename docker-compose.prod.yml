@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # API Server (exposed directly)
+  api:
+    build:
+      context: .
+      dockerfile: ./packages/api/Dockerfile
+    container_name: auto-apply-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PDF_SERVICE_URL=http://pandoc-latex:80
+      - PUPPETEER_SERVICE_URL=http://puppeteer-mcp:80
+    volumes:
+      - ./data:/app/data:rw  # SQLite database and persistent data
+      - ./assets:/app/assets:rw  # Generated assets and files
+    ports:
+      - "8080:8080"  # Expose API directly
+    networks:
+      - auto-apply-network
+    depends_on:
+      - pandoc-latex
+      - puppeteer-mcp
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+          cpus: '0.5'
+        reservations:
+          memory: 200M
+          cpus: '0.2'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Pandoc LaTeX Service
+  pandoc-latex:
+    build:
+      context: .
+      dockerfile: ./packages/pandoc-latex/Dockerfile
+    container_name: auto-apply-pandoc
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    networks:
+      - auto-apply-network
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+          cpus: '0.5'
+        reservations:
+          memory: 200M
+          cpus: '0.2'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Puppeteer MCP Service
+  puppeteer-mcp:
+    build:
+      context: .
+      dockerfile: packages/puppeteer/Dockerfile
+    container_name: auto-apply-puppeteer
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./packages/puppeteer/linux-chrome-profile:/app/packages/puppeteer/linux-chrome-profile
+      - ./packages/puppeteer/assets:/app/packages/puppeteer/assets
+    networks:
+      - auto-apply-network
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+          cpus: '0.8'
+        reservations:
+          memory: 400M
+          cpus: '0.3'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Backup Service
+  backup:
+    build:
+      context: .
+      dockerfile: ./backup/Dockerfile
+    container_name: auto-apply-backup
+    restart: unless-stopped
+    environment:
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_STORAGE_BUCKET=${GOOGLE_CLOUD_STORAGE_BUCKET}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./data:/app/data:ro  # Read-only access to data for backups
+      - ./backup/scripts:/app/scripts
+      - ./backup/logs:/app/logs
+    networks:
+      - auto-apply-network
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.1'
+    profiles:
+      - backup
+
+networks:
+  auto-apply-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local

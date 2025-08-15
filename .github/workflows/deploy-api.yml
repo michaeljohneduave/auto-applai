@@ -1,0 +1,158 @@
+name: Deploy API to Production
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: [ 'packages/frontend/**' ] # Don't trigger on frontend changes
+  workflow_dispatch: # Manual trigger
+
+env:
+  SERVER_IP: ${{ secrets.SERVER_IP }}
+  SERVER_USER: ${{ secrets.SERVER_USER }}
+  PROJECT_PATH: /home/${{ secrets.SERVER_USER }}/auto-applai
+
+jobs:
+  # Pre-deployment checks
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Validate Docker Compose
+      run: |
+        # Check if docker-compose.prod.yml is valid
+        docker-compose -f docker-compose.prod.yml config
+        
+    - name: Check for sensitive files
+      run: |
+        # Ensure .env.production is not committed
+        if [ -f ".env.production" ]; then
+          echo "❌ .env.production should not be committed to git"
+          exit 1
+        fi
+        echo "✅ No sensitive files found"
+        
+    - name: Validate deploy script
+      run: |
+        # Check if deploy.sh exists and is executable
+        if [ ! -f "deploy.sh" ]; then
+          echo "❌ deploy.sh not found"
+          exit 1
+        fi
+        echo "✅ deploy.sh found"
+
+  # Deploy to production
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        
+    - name: Add server to known hosts
+      run: |
+        ssh-keyscan -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+        
+    - name: Pre-deployment backup
+      run: |
+        ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          cd ${{ env.PROJECT_PATH }}
+          if [ -f "data/sqlite.db" ]; then
+            cp data/sqlite.db "data/sqlite.db.backup.$(date +%Y%m%d_%H%M%S)"
+            echo "✅ Pre-deployment backup created"
+          fi
+        EOF
+        
+    - name: Deploy to server
+      run: |
+        ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          cd ${{ env.PROJECT_PATH }}
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Make deploy script executable
+          chmod +x deploy.sh
+          
+          # Run deployment with auto-deploy flag
+          AUTO_DEPLOY=true ./deploy.sh
+          
+          echo "✅ API deployment completed"
+        EOF
+        
+    - name: Verify deployment
+      run: |
+        # Wait for services to be ready
+        sleep 30
+        
+        # Test health endpoint
+        if curl -f "http://${{ env.SERVER_IP }}:8080/health" > /dev/null 2>&1; then
+          echo "✅ API health check passed"
+        else
+          echo "❌ API health check failed"
+          exit 1
+        fi
+        
+    - name: Post-deployment cleanup
+      run: |
+        ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          cd ${{ env.PROJECT_PATH }}
+          
+          # Clean up old Docker images
+          docker image prune -f
+          
+          # Remove old backups (keep last 5)
+          ls -t data/sqlite.db.backup.* | tail -n +6 | xargs -r rm
+          
+          echo "✅ Cleanup completed"
+        EOF
+
+  # Health check (runs after deployment)
+  health-check:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check API health
+      run: |
+        # Test basic connectivity
+        if ! ping -c 1 ${{ env.SERVER_IP }} > /dev/null 2>&1; then
+          echo "❌ Server is not reachable"
+          exit 1
+        fi
+        
+        # Test API health endpoint
+        if curl -f "http://${{ env.SERVER_IP }}:8080/health" > /dev/null 2>&1; then
+          echo "✅ API health check passed"
+        else
+          echo "❌ API health check failed"
+          
+          # Send notification (optional)
+          if [ -n "${{ secrets.SLACK_WEBHOOK }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{"text":"🚨 Auto-Apply API health check failed!"}' \
+              "${{ secrets.SLACK_WEBHOOK }}"
+          fi
+          
+          exit 1
+        fi
+        
+    - name: Check resource usage
+      run: |
+        ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          echo "=== System Resources ==="
+          free -h
+          df -h /
+          
+          echo "=== Docker Status ==="
+          docker-compose -f ${{ env.PROJECT_PATH }}/docker-compose.prod.yml ps
+          
+          echo "=== Recent Logs ==="
+          docker-compose -f ${{ env.PROJECT_PATH }}/docker-compose.prod.yml logs --tail=10
+        EOF
