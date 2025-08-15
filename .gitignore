@@ -10,3 +10,4 @@ linux-chrome-profile*
 
 *.db
 task-lists/*
+.vscode/launch.json

@@ -8,7 +8,7 @@ export async function extractInfo(
 	html: string,
 	sessionId: string,
 ): Promise<z.infer<typeof jobPostingSchema>> {
-	const llm = new LLM("JobCompanyApplicationExtractor", {
+	const llm = new LLM("extract-info", {
 		model: GEMINI_25_FLASH,
 		sessionId,
 	});
@@ -99,7 +99,7 @@ Given an image or html, extract 100% accurate job application information in str
 }
 
 export async function extractJobInfo(html: string, sessionId: string) {
-	const llm = new LLM("JobInfoExtractor", {
+	const llm = new LLM("extract-job-info", {
 		model: GEMINI_25_FLASH,
 		sessionId,
 	});
@@ -155,7 +155,7 @@ Given an image or html, extract 100% accurate job information in structured form
 }
 
 export async function extractApplicationForm(html: string, sessionId: string) {
-	const llm = new LLM("ApplicationFormExtractor", {
+	const llm = new LLM("extract-application-form", {
 		model: GEMINI_25_FLASH,
 		sessionId,
 	});
@@ -210,7 +210,7 @@ Given an image or html, extract 100% accurate job application form information i
 }
 
 export async function extractCompanyInfo(html: string, sessionId: string) {
-	const llm = new LLM("CompanyInfoExtractor", {
+	const llm = new LLM("extract-company-info", {
 		model: GEMINI_25_FLASH,
 		sessionId,
 	});

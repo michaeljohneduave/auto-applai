@@ -57,7 +57,7 @@ async function latexResumeGenerator(
 	sessionId: string,
 ) {
 	console.log("Generating latex resume");
-	const llm = new LLM("LatexBoss", {
+	const llm = new LLM("latex-resume-generator", {
 		model: GEMINI_25_FLASH,
 		sessionId,
 	});
@@ -155,7 +155,7 @@ async function loadApplicationContext(sessionId: string, userId: string) {
 			throw new Error("User not found.");
 		}
 
-		const llm = new LLM("personalInfo", {
+		const llm = new LLM("load-personal-info", {
 			model: GEMINI_25_FLASH_LITE,
 			sessionId,
 		});
