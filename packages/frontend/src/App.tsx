@@ -94,7 +94,7 @@ function App() {
 					<div className="flex flex-1 justify-center overflow-hidden">
 						<aside className="max-w-[1200px] w-full overflow-auto p-4">
 							<div className="flex flex-col gap-y-4">
-								<div className="flex flex-col gap-y-1">
+								{/* <div className="flex flex-col gap-y-1">
 									<span>Enter URL:</span>
 									<div className="flex gap-2">
 										<Input
@@ -103,7 +103,7 @@ function App() {
 										/>
 										<Button onClick={handleNewSession}>Go!</Button>
 									</div>
-								</div>
+								</div> */}
 								<BaseAssetTabs />
 								<ApplicationList />
 							</div>

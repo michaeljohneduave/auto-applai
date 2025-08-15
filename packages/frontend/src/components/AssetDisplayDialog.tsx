@@ -331,7 +331,7 @@ export default function AssetDisplayDialog() {
 			case "md":
 				return (
 					<div className="grid grid-cols-10 gap-4 h-full">
-						<div className="col-span-6 overflow-y-auto">
+						<div className="col-span-5 overflow-y-auto">
 							<CodeMirrorEditor
 								value={content || "\n".repeat(49)}
 								onChange={handleEditorChange}
@@ -339,7 +339,7 @@ export default function AssetDisplayDialog() {
 								onCreateEditor={setEditorView}
 							/>
 						</div>
-						<div className="flex col-span-4 overflow-y-auto max-w-full">
+						<div className="flex col-span-5 overflow-y-auto max-w-full">
 							{content ? (
 								<div className="prose">
 									<ReactMarkdown>{content}</ReactMarkdown>
@@ -355,7 +355,7 @@ export default function AssetDisplayDialog() {
 			case "latex":
 				return (
 					<div className="grid grid-cols-10 gap-4 h-full">
-						<div className="col-span-6 overflow-auto">
+						<div className="col-span-5 overflow-auto">
 							<CodeMirrorEditor
 								value={content || "\n".repeat(49)}
 								onChange={handleEditorChange}
@@ -363,12 +363,12 @@ export default function AssetDisplayDialog() {
 								onCreateEditor={setEditorView}
 							/>
 						</div>
-						<div className="flex col-span-4 overflow-y-auto relative">
+						<div className="flex col-span-5 overflow-y-auto relative">
 							{derivedContent ? (
 								<>
 									<iframe
 										title={`${selected.name} PDF`}
-										src={`data:application/pdf;base64,${derivedContent}`}
+										src={`data:application/pdf;base64,${derivedContent}#view=FitH`}
 										className="w-full h-full"
 									/>
 									<Button
@@ -407,7 +407,7 @@ export default function AssetDisplayDialog() {
 					<div className="overflow-auto flex-1 relative">
 						<iframe
 							title={`${selected.name} PDF`}
-							src={`data:application/pdf;base64,${selected.content}`}
+							src={`data:application/pdf;base64,${selected.content}#view=FitH`}
 							className="w-full h-full"
 						/>
 						<Button
