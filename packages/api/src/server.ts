@@ -948,26 +948,6 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
-// Graceful shutdown handling
-async function gracefulShutdown() {
-	app.log.info("Shutting down gracefully...");
-	try {
-		await app.close();
-		app.log.info("Server closed successfully");
-		process.exit(0);
-	} catch (error) {
-		if (error instanceof Error) {
-			app.log.error(`Error during shutdown: ${error.message}`);
-		} else {
-			app.log.error("Error during shutdown");
-		}
-		process.exit(1);
-	}
-}
-
-process.on("SIGINT", gracefulShutdown);
-process.on("SIGTERM", gracefulShutdown);
-
 const PORT = 5500;
 app
 	.listen({ port: PORT, host: "0.0.0.0" })
