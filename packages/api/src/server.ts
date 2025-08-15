@@ -956,13 +956,17 @@ async function gracefulShutdown() {
 		app.log.info("Server closed successfully");
 		process.exit(0);
 	} catch (error) {
-		app.log.error("Error during shutdown:", error);
+		if (error instanceof Error) {
+			app.log.error(`Error during shutdown: ${error.message}`);
+		} else {
+			app.log.error("Error during shutdown");
+		}
 		process.exit(1);
 	}
 }
 
-// process.on("SIGINT", gracefulShutdown);
-// process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
 
 const PORT = 5500;
 app
@@ -976,7 +980,13 @@ app
 			await getModelPricing();
 			app.log.info("Model pricing cache initialized");
 		} catch (error) {
-			app.log.error("Failed to initialize model pricing cache:", error);
+			if (error instanceof Error) {
+				app.log.error(
+					`Failed to initialize model pricing cache: ${error.message}`,
+				);
+			} else {
+				app.log.error("Failed to initialize model pricing cache");
+			}
 		}
 	})
 	.catch((err) => {
