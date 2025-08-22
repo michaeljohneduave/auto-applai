@@ -13,17 +13,23 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy root package.json and pnpm-workspace.yaml
+# Install pnpm (standalone) and add to PATH
+RUN curl -fsSL https://get.pnpm.io/install.sh | sh - && \
+    /root/.local/share/pnpm/pnpm --version
+ENV PATH="/root/.local/share/pnpm:${PATH}"
+
+# Copy root manifests
 COPY package.json ./
 COPY pnpm-workspace.yaml ./
+COPY pnpm-lock.yaml ./
 
 # Copy package.json files for all workspaces
 COPY packages/api/package.json ./packages/api/
 COPY packages/core/package.json ./packages/core/
 COPY packages/common/package.json ./packages/common/
 
-# Install dependencies using Bun
-RUN bun install
+# Install dependencies using pnpm (workspace-aware)
+RUN pnpm install --frozen-lockfile
 
 # Copy source files for all workspaces
 COPY packages/api/src/ ./packages/api/src/
@@ -34,6 +40,9 @@ COPY packages/common/src/ ./packages/common/src/
 RUN mkdir -p /app/data
 RUN mkdir -p /app/assets/failed-scrapes
 
+# Set API port for runtime and healthchecks
+ENV API_PORT=8080
+
 # Set the working directory to the API workspace
 WORKDIR /app/packages/api
 
@@ -42,7 +51,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
+  CMD curl -f http://localhost:${API_PORT}/health || exit 1
 
 # Define the command to run when the container starts
 CMD ["bun", "run", "start"]

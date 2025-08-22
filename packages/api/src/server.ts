@@ -948,7 +948,7 @@ app.withTypeProvider<ZodTypeProvider>().route({
 	},
 });
 
-const PORT = 5500;
+const PORT = parseInt(process.env.API_PORT || "5500");
 app
 	.listen({ port: PORT, host: "0.0.0.0" })
 	.then(async () => {
