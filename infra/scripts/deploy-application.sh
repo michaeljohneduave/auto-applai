@@ -1,12 +1,19 @@
 set -euo pipefail
 
-echo "Starting application deployment in ${DEPLOYMENT_MODE} mode..."
-
+# ==============================
+# Configuration (hoisted vars)
+# ==============================
+# Persistent app data lives here
 ROOT_DIR="/opt/auto-apply"
+# Working copy for the application source
 APP_DIR="/home/ubuntu/auto-apply"
+# Compose file and flags (git mode)
+COMPOSE_FILE="docker-compose.oci.yml"
+BUILD_FLAG="--build"
+
+echo "Starting application deployment (git mode)..."
 
 handle_git_deployment() {
-  local repo_url="${REPO}"
   local target_dir="$APP_DIR"
 
   echo "=== GIT DEPLOYMENT MODE ==="
@@ -31,9 +38,14 @@ handle_git_deployment() {
   else
     echo "Repository does not exist, initializing in subdirectory..."
     cd "$target_dir"
+    if [ -z "${REPO:-}" ]; then
+      echo "Error: REPO environment variable is not set and repository is not initialized."
+      echo "       Set REPO to your git URL (e.g., https://github.com/owner/repo.git) and re-run."
+      exit 1
+    fi
     git init
     git remote remove origin 2>/dev/null || true
-    git remote add origin "$repo_url"
+    git remote add origin "$REPO"
     if git ls-remote --exit-code --heads origin main >/dev/null 2>&1; then
       DEFAULT_BRANCH=main
     elif git ls-remote --exit-code --heads origin master >/dev/null 2>&1; then
@@ -55,68 +67,10 @@ handle_git_deployment() {
 
   echo "Current commit: $(git rev-parse --short HEAD)"
   echo "Current branch: $(git branch --show-current)"
-
-  COMPOSE_FILE="docker-compose.oci.yml"
-  BUILD_FLAG="--build"
 }
 
-handle_registry_deployment() {
-  local target_dir="$APP_DIR"
-  local registry_url="${REGION}.ocir.io"
-  local namespace_name=$(oci os ns get --query "data" --raw-output)
-  local image_name="$registry_url/$namespace_name/${RESOURCE_PREFIX}/auto-apply"
+handle_git_deployment
 
-  echo "=== REGISTRY DEPLOYMENT MODE ==="
-  echo "Registry: $registry_url"
-  echo "Image: $image_name"
-
-  sudo mkdir -p "$target_dir"
-  sudo chown -R ubuntu:ubuntu "$target_dir"
-  cd "$target_dir"
-
-  if [ ! -f "docker-compose.registry.yml" ]; then
-    echo "Creating registry-based docker-compose file..."
-    sudo tee docker-compose.registry.yml >/dev/null <<EOF
-version: '3.8'
-services:
-  auto-apply:
-    image: $image_name:latest
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    volumes:
-      - /opt/auto-apply/data:/app/data
-      - /opt/auto-apply/assets:/app/assets
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-EOF
-    sudo chown ubuntu:ubuntu docker-compose.registry.yml
-  fi
-
-  echo "Pulling latest image: $image_name:latest"
-  if ! docker pull "$image_name:latest"; then
-    echo "Failed to pull image. Falling back to git deployment..."
-    handle_git_deployment
-    return
-  fi
-
-  COMPOSE_FILE="docker-compose.registry.yml"
-  BUILD_FLAG=""
-}
-
-if [ "${DEPLOYMENT_MODE}" = "registry" ]; then
-  handle_registry_deployment
-else
-  handle_git_deployment
-fi
-
-# Ensure app and persistent directories exist and are owned by ubuntu
 sudo mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/assets" "$ROOT_DIR/backup" "$APP_DIR"
 sudo chown -R ubuntu:ubuntu "$ROOT_DIR" "$APP_DIR"
 cd "$APP_DIR"
@@ -130,13 +84,8 @@ echo "Stopping existing containers..."
 docker-compose -f "$COMPOSE_FILE" down || true
 
 echo "Starting services with $COMPOSE_FILE..."
-if [ -n "$BUILD_FLAG" ]; then
-  echo "Building and starting services..."
-  docker-compose -f "$COMPOSE_FILE" up -d $BUILD_FLAG
-else
-  echo "Starting services from registry images..."
-  docker-compose -f "$COMPOSE_FILE" up -d
-fi
+echo "Building and starting services..."
+docker-compose -f "$COMPOSE_FILE" up -d $BUILD_FLAG
 
 echo "Waiting for services to start..."
 sleep 15

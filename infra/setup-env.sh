@@ -120,6 +120,8 @@ echo "🔐 Setting up SECRETS (API Keys and sensitive data)..."
 echo "   These will be encrypted and stored securely in Pulumi."
 
 prompt_cfg "app" "GEMINI_API_KEY" "Google Gemini API Key (required for AI features)" "true"
+prompt_cfg "app" "OPENAI_API_KEY" "OpenAI API Key (optional, used if configured)" "true"
+prompt_cfg "app" "XAI_API_KEY" "xAI (Grok) API Key (optional)" "true"
 prompt_cfg "app" "CLERK_SECRET_KEY" "Clerk Secret Key (required for authentication)" "true"
 
 echo ""
