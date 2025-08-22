@@ -46,7 +46,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         cache-dependency-path: 'infra/package-lock.json'
         
@@ -66,6 +66,11 @@ jobs:
         else
           echo "environment=dev" >> $GITHUB_OUTPUT
         fi
+    
+    - name: Set redeploy trigger (commit)
+      run: |
+        cd infra
+        pulumi config set --stack ${{ steps.env.outputs.environment }} --plaintext app:commitSha ${{ github.sha }}
         
     - name: Validate Pulumi configuration
       run: |
@@ -94,7 +99,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         cache-dependency-path: 'infra/package-lock.json'
         
@@ -106,6 +111,11 @@ jobs:
     - name: Setup Pulumi
       uses: pulumi/setup-pulumi@v2
         
+    - name: Set redeploy trigger (commit)
+      run: |
+        cd infra
+        pulumi config set --stack ${{ needs.validate.outputs.environment }} --plaintext app:commitSha ${{ github.sha }}
+
     - name: Deploy infrastructure
       run: |
         cd infra
@@ -182,12 +192,6 @@ jobs:
         
     - name: Check application health
       run: |
-        # Test basic connectivity
-        if ! ping -c 1 ${{ steps.outputs.outputs.instance_ip }} > /dev/null 2>&1; then
-          echo "❌ Server is not reachable"
-          exit 1
-        fi
-        
         # Test API health endpoint
         if curl -f "http://${{ steps.outputs.outputs.instance_ip }}:8080/health" > /dev/null 2>&1; then
           echo "✅ Application health check passed"
@@ -208,7 +212,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         cache-dependency-path: 'infra/package-lock.json'
         
@@ -220,21 +224,6 @@ jobs:
     - name: Setup Pulumi
       uses: pulumi/setup-pulumi@v2
       
-    - name: Configure OCI credentials
-      run: |
-        mkdir -p ~/.oci
-        echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
-        chmod 600 ~/.oci/oci_api_key.pem
-        
-        cat > ~/.oci/config << EOF
-        [DEFAULT]
-        user=${{ secrets.OCI_USER_ID }}
-        fingerprint=${{ secrets.OCI_FINGERPRINT }}
-        tenancy=${{ secrets.OCI_TENANCY_ID }}
-        region=${{ secrets.OCI_REGION }}
-        key_file=~/.oci/oci_api_key.pem
-        EOF
-        
     - name: Destroy infrastructure
       run: |
         cd infra

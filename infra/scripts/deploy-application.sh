@@ -65,8 +65,15 @@ handle_git_deployment() {
     exit 1
   fi
 
-  echo "Current commit: $(git rev-parse --short HEAD)"
+  current_commit_short=$(git rev-parse --short HEAD)
+  echo "Current commit: ${current_commit_short}"
   echo "Current branch: $(git branch --show-current)"
+  if [ -n "${COMMIT_SHA:-}" ]; then
+    echo "Target commit (COMMIT_SHA): ${COMMIT_SHA}"
+    if [ "${current_commit_short}" != "${COMMIT_SHA:0:7}" ]; then
+      echo "Warning: current HEAD does not match COMMIT_SHA"
+    fi
+  fi
 }
 
 handle_git_deployment

@@ -19,6 +19,8 @@ const appConfig = new pulumi.Config("app");
 
 // Deployment mode configuration
 const deploymentMode = config.get("deploymentMode") || "git"; // "git" or "registry"
+// Commit SHA used to trigger redeploys in CI
+const commitSha = appConfig.get("commitSha") || "";
 
 // SSH configuration (keys stored in Pulumi stack config under the "ssh" namespace)
 const sshConfig = new pulumi.Config("ssh");
@@ -31,8 +33,8 @@ const publicKey = sshConfig.require("publicKey");
 // Get configuration
 // Project-specific configuration is read from the default namespace (Option A)
 // Only true provider configs remain under the `oci` namespace (e.g., region)
-const compartmentId = config.require("compartmentId");
 const ociConfig = new pulumi.Config("oci");
+const compartmentId = ociConfig.require("compartmentId");
 const region = ociConfig.require("region");
 
 // Stack name for resource naming
@@ -55,6 +57,7 @@ REPO="${repo}"
 REGION="${region}"
 RESOURCE_PREFIX="${resourcePrefix}"
 DEPLOYMENT_MODE="${deploymentMode}"
+COMMIT_SHA="${commitSha}"
 
 ${deployScriptTemplate}
 `;
@@ -358,7 +361,7 @@ const deployApplication = new command.remote.Command(
 			user: "ubuntu",
 			privateKey: privateKey,
 		},
-		triggers: [instance.id],
+		triggers: [instance.id, commitSha],
 		create: deployScript,
 	},
 	{

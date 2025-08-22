@@ -163,6 +163,21 @@ prompt_cfg "oci" "tenancyOcid" "OCI Tenancy OCID" "false"
 prompt_cfg "oci" "userOcid" "OCI User OCID" "false"
 prompt_cfg "oci" "fingerprint" "OCI API key fingerprint" "false"
 
+# Prompt for OCI API private key (PEM) and store as Pulumi secret
+echo ""
+echo "🔐 OCI API private key (PEM)"
+if [ "$FORCE" = "true" ] || ! has_cfg "oci" "privateKey"; then
+    read -p "   Path to OCI API private key PEM (e.g., ~/.oci/oci_api_key.pem): " oci_key_path
+    if [ -n "$oci_key_path" ] && [ -f "$oci_key_path" ]; then
+        echo "   🔐 Storing oci:privateKey as Pulumi secret"
+        pulumi config set --secret --stack "$STACK_NAME" oci:privateKey "$(cat "$oci_key_path")"
+    else
+        echo "   ⚠️  Skipping oci:privateKey (set later with: pulumi config set --secret oci:privateKey \"<PEM CONTENT>\")"
+    fi
+else
+    echo "   ✅ Keeping existing oci:privateKey"
+fi
+
 echo ""
 echo "🔑 SSH KEY configuration for Pulumi remote commands..."
 read -p "   Generate a new SSH keypair for this project (ed25519)? (y/N): " gen_key
