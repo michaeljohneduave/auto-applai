@@ -1,0 +1,26 @@
+{
+  "name": "@auto-apply/infra",
+  "version": "1.0.0",
+  "description": "Pulumi infrastructure for Auto-Apply on Oracle Cloud Infrastructure",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "destroy": "pulumi destroy",
+    "refresh": "pulumi refresh",
+    "export": "pulumi stack export",
+    "import": "pulumi stack import"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@pulumi/command": "^0.7.0",
+    "@pulumi/docker": "^4.0.0",
+    "@pulumi/oci": "^3.3.0",
+    "@pulumi/pulumi": "^3.190.0"
+  }
+}

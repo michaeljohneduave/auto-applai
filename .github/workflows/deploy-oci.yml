@@ -1,0 +1,241 @@
+name: Deploy to OCI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'infra/**'
+      - 'packages/api/**'
+      - 'packages/core/**'
+      - 'packages/puppeteer/**'
+      - 'packages/pandoc-latex/**'
+      - 'docker-compose.*.yml'
+      - '.github/workflows/deploy-oci.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - prod
+      deploy_mode:
+        description: 'Deployment Mode'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+        - preview
+        - deploy
+
+env:
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+jobs:
+  # Validate infrastructure
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'infra/package-lock.json'
+        
+    - name: Install dependencies
+      run: |
+        cd infra
+        npm install
+        
+    - name: Setup Pulumi
+      uses: pulumi/setup-pulumi@v2
+    
+    - name: Determine environment
+      id: env
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+        else
+          echo "environment=dev" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Validate Pulumi configuration
+      run: |
+        cd infra
+        pulumi preview --stack ${{ steps.env.outputs.environment }}
+        
+    - name: Check for sensitive files
+      run: |
+        # Ensure environment files are not committed
+        if [ -f ".env.oci" ] || [ -f ".env.production" ]; then
+          echo "❌ Environment files should not be committed to git"
+          exit 1
+        fi
+        echo "✅ No sensitive files found"
+
+  # Deploy infrastructure
+  deploy-infrastructure:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_mode == 'deploy')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'infra/package-lock.json'
+        
+    - name: Install dependencies
+      run: |
+        cd infra
+        npm install
+        
+    - name: Setup Pulumi
+      uses: pulumi/setup-pulumi@v2
+        
+    - name: Deploy infrastructure
+      run: |
+        cd infra
+        pulumi up --stack ${{ needs.validate.outputs.environment }} --yes
+        
+    - name: Get deployment outputs
+      run: |
+        cd infra
+        pulumi stack output --stack ${{ needs.validate.outputs.environment }} --json > ../deployment-outputs.json
+        
+    - name: Upload deployment outputs
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-outputs-${{ needs.validate.outputs.environment }}
+        path: deployment-outputs.json
+
+  # Deploy application
+  deploy-application:
+    needs: [validate, deploy-infrastructure]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_mode == 'deploy')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download deployment outputs
+      uses: actions/download-artifact@v4
+      with:
+        name: deployment-outputs-${{ needs.validate.outputs.environment }}
+        
+    - name: Parse deployment outputs
+      id: outputs
+      run: |
+        INSTANCE_IP=$(jq -r '.instancePublicIp' deployment-outputs.json)
+        echo "instance_ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+        
+    - name: Wait for services to be healthy
+      run: |
+        # Wait for services to start
+        sleep 60
+        
+        # Test health endpoint with retries
+        for i in {1..10}; do
+          if curl -f "http://${{ steps.outputs.outputs.instance_ip }}:8080/health" > /dev/null 2>&1; then
+            echo "✅ Application is healthy"
+            exit 0
+          else
+            echo "⏳ Waiting for application to be healthy... (attempt $i/10)"
+            sleep 30
+          fi
+        done
+        
+        echo "❌ Application health check failed after 10 attempts"
+        exit 1
+
+  # Health check
+  health-check:
+    needs: [validate, deploy-application]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_mode == 'deploy')
+    
+    steps:
+    - name: Download deployment outputs
+      uses: actions/download-artifact@v4
+      with:
+        name: deployment-outputs-${{ needs.validate.outputs.environment }}
+        
+    - name: Parse deployment outputs
+      id: outputs
+      run: |
+        INSTANCE_IP=$(jq -r '.instancePublicIp' deployment-outputs.json)
+        echo "instance_ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+        
+    - name: Check application health
+      run: |
+        # Test basic connectivity
+        if ! ping -c 1 ${{ steps.outputs.outputs.instance_ip }} > /dev/null 2>&1; then
+          echo "❌ Server is not reachable"
+          exit 1
+        fi
+        
+        # Test API health endpoint
+        if curl -f "http://${{ steps.outputs.outputs.instance_ip }}:8080/health" > /dev/null 2>&1; then
+          echo "✅ Application health check passed"
+        else
+          echo "❌ Application health check failed"
+          exit 1
+        fi
+
+  # Cleanup on failed PR
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed' && github.event.pull_request.merged == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'infra/package-lock.json'
+        
+    - name: Install dependencies
+      run: |
+        cd infra
+        npm install
+        
+    - name: Setup Pulumi
+      uses: pulumi/setup-pulumi@v2
+      
+    - name: Configure OCI credentials
+      run: |
+        mkdir -p ~/.oci
+        echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+        chmod 600 ~/.oci/oci_api_key.pem
+        
+        cat > ~/.oci/config << EOF
+        [DEFAULT]
+        user=${{ secrets.OCI_USER_ID }}
+        fingerprint=${{ secrets.OCI_FINGERPRINT }}
+        tenancy=${{ secrets.OCI_TENANCY_ID }}
+        region=${{ secrets.OCI_REGION }}
+        key_file=~/.oci/oci_api_key.pem
+        EOF
+        
+    - name: Destroy infrastructure
+      run: |
+        cd infra
+        pulumi destroy --stack dev --yes

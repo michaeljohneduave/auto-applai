@@ -42,3 +42,9 @@ The process involves five main steps:
 -   [ ] Resume generation feedback, critique and gut check from "hiring manager" LLM.
 -   [ ] Robust form parsing and correct fill up.
 -   [ ] LLM response evaluations.
+
+## Deploy
+
+See infrastructure deployment guide:
+
+infra/DEPLOYMENT.md

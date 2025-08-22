@@ -1,0 +1,3 @@
+name: auto-apply-oci
+runtime: nodejs
+description: Infrastructure for Auto-Apply on OCI (Pulumi TypeScript)
