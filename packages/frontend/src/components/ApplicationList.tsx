@@ -14,6 +14,7 @@ import {
 	type SortingState,
 	useReactTable,
 } from "@tanstack/react-table";
+// Tree-shake specific icons from lucide-react
 import {
 	ChevronLeft,
 	ChevronRight,

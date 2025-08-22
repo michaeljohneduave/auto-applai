@@ -1,19 +1,44 @@
-import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNewSession } from "./api";
-import ApplicationList from "./components/ApplicationList";
-import AssetDisplayDialog from "./components/AssetDisplayDialog";
 import BaseAssetTabs from "./components/BaseAssetTabs";
 import Header from "./components/Header";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
 import { UIProvider } from "./contexts/UIContext";
+
+// Lazy load heavy components
+const LazyApplicationList = lazy(
+	() => import("./components/LazyApplicationList"),
+);
+const LazyAssetDisplayDialog = lazy(
+	() => import("./components/LazyAssetDisplayDialog"),
+);
+
+// Lazy load authentication components
+const LazySignedIn = lazy(() =>
+	import("@clerk/clerk-react").then((module) => ({ default: module.SignedIn })),
+);
+const LazySignedOut = lazy(() =>
+	import("@clerk/clerk-react").then((module) => ({
+		default: module.SignedOut,
+	})),
+);
+const LazySignInButton = lazy(() =>
+	import("@clerk/clerk-react").then((module) => ({
+		default: module.SignInButton,
+	})),
+);
+
+// Loading component for lazy-loaded components
+const LoadingSpinner = () => (
+	<div className="flex justify-center items-center p-8">
+		<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+	</div>
+);
 
 function App() {
 	const newSession = useNewSession();
 	const [url, setUrl] = useState("");
 	const [showReturnToExtension, setShowReturnToExtension] = useState(false);
-	const [returnTabId, setReturnTabId] = useState<string | null>(null);
+	const [_, setReturnTabId] = useState<string | null>(null);
 	const [returnTabUrl, setReturnTabUrl] = useState<string | null>(null);
 
 	useEffect(() => {
@@ -41,12 +66,12 @@ function App() {
 
 	return (
 		<UIProvider>
-			<SignedOut>
+			<LazySignedOut>
 				<div className="flex justify-center items-center h-screen">
-					<SignInButton />
+					<LazySignInButton />
 				</div>
-			</SignedOut>
-			<SignedIn>
+			</LazySignedOut>
+			<LazySignedIn>
 				<div className="flex flex-col h-screen">
 					<Header />
 					{showReturnToExtension && (
@@ -105,16 +130,20 @@ function App() {
 									</div>
 								</div> */}
 								<BaseAssetTabs />
-								<ApplicationList />
+								<Suspense fallback={<LoadingSpinner />}>
+									<LazyApplicationList />
+								</Suspense>
 							</div>
 						</aside>
 						{/* <main className="flex-1 overflow-auto p-">
 							<AssetDisplay />
 						</main> */}
 					</div>
-					<AssetDisplayDialog />
+					<Suspense fallback={<LoadingSpinner />}>
+						<LazyAssetDisplayDialog />
+					</Suspense>
 				</div>
-			</SignedIn>
+			</LazySignedIn>
 		</UIProvider>
 	);
 }
