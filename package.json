@@ -11,5 +11,10 @@
 	},
 	"scripts": {
 		"check": "biome check --reporter=summary"
+	},
+	"pnpm": {
+		"overrides": {
+			"content-security-policy-parser": "0.6.0"
+		}
 	}
 }
