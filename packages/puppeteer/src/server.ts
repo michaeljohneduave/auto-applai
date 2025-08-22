@@ -140,7 +140,10 @@ app
 	});
 
 app.get("/health", (req, res) => {
-	res.status(200).send();
+	res.status(200).send({
+		status: "healthy",
+		timestamp: new Date().toISOString(),
+	});
 });
 
 async function cleanup() {
